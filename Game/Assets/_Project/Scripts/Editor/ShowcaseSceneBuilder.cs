@@ -48,6 +48,7 @@ namespace Game.Editor
             BuildForest(env);
             BuildAlphaStones(env, new Vector3(0f, 0f, 31f));
             BuildBounds(env);
+            AtmosphereBuilder.BuildEffects(env, _rng);
 
             // --- геймплейные маркеры (их и стоит двигать в инспекторе)
             var spawn = new GameObject("PlayerSpawn", typeof(PlayerSpawnPoint)).transform;
@@ -80,28 +81,7 @@ namespace Game.Editor
 
         // ------------------------------------------------------------------ окружение
 
-        private static void BuildLighting(Transform parent)
-        {
-            var sun = new GameObject("Sun");
-            sun.transform.SetParent(parent);
-            sun.transform.rotation = Quaternion.Euler(50f, -35f, 0f);
-            var light = sun.AddComponent<Light>();
-            light.type = LightType.Directional;
-            light.color = new Color(1f, 0.95f, 0.85f);
-            light.intensity = 1.3f;
-            light.shadows = LightShadows.Soft;
-            RenderSettings.sun = light;
-
-            RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.58f, 0.66f, 0.78f);
-            RenderSettings.ambientEquatorColor = new Color(0.45f, 0.47f, 0.42f);
-            RenderSettings.ambientGroundColor = new Color(0.25f, 0.23f, 0.2f);
-            RenderSettings.fog = true;
-            RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = new Color(0.62f, 0.72f, 0.8f);
-            RenderSettings.fogStartDistance = 35f;
-            RenderSettings.fogEndDistance = 80f;
-        }
+        private static void BuildLighting(Transform parent) => AtmosphereBuilder.BuildLighting(parent);
 
         private static void BuildCamera()
         {
@@ -109,10 +89,10 @@ namespace Game.Editor
             cam.transform.position = new Vector3(0f, 14f, -13f);
             cam.transform.rotation = Quaternion.Euler(55f, 0f, 0f);
             var c = cam.AddComponent<Camera>();
-            c.clearFlags = CameraClearFlags.SolidColor;
-            c.backgroundColor = new Color(0.62f, 0.72f, 0.8f);
             c.fieldOfView = 40f;
+            c.farClipPlane = 200f;
             cam.AddComponent<AudioListener>();
+            AtmosphereBuilder.SetupCamera(c);
         }
 
         private static void BuildGround(Transform parent)
@@ -154,7 +134,7 @@ namespace Game.Editor
                 .transform.rotation = Quaternion.Euler(0f, 30f, 0f);
             Prop(PrimitiveType.Cube, fire, "Log", fire.position + new Vector3(0f, 0.15f, 0f), new Vector3(0.9f, 0.15f, 0.15f), Mat("Wood", new Color(0.4f, 0.27f, 0.15f)), false)
                 .transform.rotation = Quaternion.Euler(0f, -40f, 0f);
-            var flame = Prop(PrimitiveType.Cube, fire, "Flame", fire.position + new Vector3(0f, 0.45f, 0f), new Vector3(0.35f, 0.5f, 0.35f), UnlitMat("Fire", new Color(1f, 0.55f, 0.1f)), false);
+            var flame = Prop(PrimitiveType.Cube, fire, "Flame", fire.position + new Vector3(0f, 0.45f, 0f), new Vector3(0.35f, 0.5f, 0.35f), UnlitMat("Fire", new Color(2.6f, 1.2f, 0.25f)), false);
             flame.transform.rotation = Quaternion.Euler(0f, 45f, 0f);
             var lightGo = new GameObject("FireLight");
             lightGo.transform.SetParent(fire);
@@ -162,10 +142,14 @@ namespace Game.Editor
             var l = lightGo.AddComponent<Light>();
             l.type = LightType.Point;
             l.color = new Color(1f, 0.6f, 0.25f);
-            l.range = 9f;
-            l.intensity = 3f;
-            l.shadows = LightShadows.None;
-            lightGo.AddComponent<LightFlicker>();
+            l.range = 12f;
+            l.intensity = 4.5f;
+            l.shadows = LightShadows.Soft; // в сумерках костёр — главный тёплый свет, пусть отбрасывает тени
+            l.shadowStrength = 0.7f;
+            var flicker = lightGo.AddComponent<LightFlicker>();
+            flicker.BaseIntensity = 4.5f;
+            flicker.Amount = 0.8f;
+            AtmosphereBuilder.BuildEmbers(fire, fire.position + Vector3.up * 0.5f);
 
             // палатки (куб, повёрнутый на 45° и наполовину в земле = треугольная крыша)
             Tent(camp, new Vector3(-4.5f, 0f, 2.5f), 20f, new Color(0.7f, 0.6f, 0.42f));
@@ -205,6 +189,7 @@ namespace Game.Editor
             forest.SetParent(parent);
 
             // свои модели (Game → Окружение → Собрать префабы из моделей); если их нет — плейсхолдеры
+            EnvironmentPrefabs.BuildAll(); // освежить префабы и материалы (toon-шейдер) перед расстановкой
             var treePrefabs = EnvironmentPrefabs.Load("Tree");
             var rockPrefabs = EnvironmentPrefabs.Load("Rock");
             var bushPrefabs = EnvironmentPrefabs.Load("Bush");
@@ -371,27 +356,44 @@ namespace Game.Editor
             return go;
         }
 
+        /// <summary>Материал плейсхолдера: toon-шейдер (как у моделей), если он есть, иначе URP Lit.</summary>
         private static Material Mat(string name, Color color)
         {
             string path = $"{GeneratedDir}/Materials/{name}.mat";
-            var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
-            if (existing != null)
+            var toon = Shader.Find(EnvironmentPrefabs.ToonShaderName);
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (m == null)
             {
-                existing.color = color;
-                return existing;
+                m = MaterialFactory.CreateLit(color);
+                AssetDatabase.CreateAsset(m, path);
             }
-            var m = MaterialFactory.CreateLit(color);
-            AssetDatabase.CreateAsset(m, path);
+            if (toon != null && m.shader != toon)
+            {
+                m.shader = toon;
+                m.SetFloat("_UseVertexColors", 0f);
+                m.DisableKeyword("_VERTEX_COLORS");
+                m.SetColor("_ShadowColor", new Color(0.36f, 0.32f, 0.58f));
+                m.SetColor("_RimColor", new Color(1f, 0.72f, 0.48f));
+                m.SetFloat("_RimStrength", 0.25f);
+                m.SetFloat("_GradientHeight", 1.5f);
+            }
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
+            else m.color = color;
+            EditorUtility.SetDirty(m);
             return m;
         }
 
         private static Material UnlitMat(string name, Color color)
         {
             string path = $"{GeneratedDir}/Materials/{name}.mat";
-            var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
-            if (existing != null) return existing;
-            var m = MaterialFactory.CreateUnlit(color);
-            AssetDatabase.CreateAsset(m, path);
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (m == null)
+            {
+                m = MaterialFactory.CreateUnlit(color);
+                AssetDatabase.CreateAsset(m, path);
+            }
+            m.color = color; // HDR-цвет (>1) светится через Bloom
+            EditorUtility.SetDirty(m);
             return m;
         }
 

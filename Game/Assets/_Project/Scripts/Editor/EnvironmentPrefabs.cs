@@ -9,7 +9,7 @@ namespace Game.Editor
     /// <summary>
     /// Модели окружения → префабы. Кладёшь FBX `Env_*` в <see cref="ModelsDir"/>, и после импорта
     /// для каждой модели сам собирается префаб в <see cref="PrefabsDir"/>:
-    /// общий материал M_Env_Forest (палитра), коллайдер по типу из имени.
+    /// материал M_Env_Forest или M_Env_Forest_Foliage (toon-шейдер + палитра, листва качается), коллайдер по типу из имени.
     ///   Env_Tree_*  → капсула на ствол;  Env_Rock_* → выпуклый MeshCollider;  Env_Bush_*, Env_Grass_* → без коллайдера.
     /// Генератор сцены Showcase потом расставляет эти префабы вместо плейсхолдеров.
     /// Меню: Game → Окружение → Собрать префабы из моделей.
@@ -19,6 +19,8 @@ namespace Game.Editor
         public const string ModelsDir = "Assets/_Project/Art/Models/Environment/Forest";
         public const string PrefabsDir = "Assets/_Project/Prefabs/Environment/Forest";
         public const string MaterialPath = "Assets/_Project/Art/Materials/M_Env_Forest.mat";
+        public const string FoliageMaterialPath = "Assets/_Project/Art/Materials/M_Env_Forest_Foliage.mat";
+        public const string ToonShaderName = "Game/Stylized Toon";
         public const string PalettePath = "Assets/_Project/Art/Textures/Environment/T_Palette_Forest.png";
 
         [MenuItem("Game/Окружение/Собрать префабы из моделей", priority = 40)]
@@ -43,6 +45,7 @@ namespace Game.Editor
             if (!AssetDatabase.IsValidFolder(ModelsDir)) return 0;
             EnsureFolder(PrefabsDir);
             var material = GetOrCreateMaterial();
+            var foliage = GetOrCreateFoliageMaterial();
 
             int count = 0;
             foreach (var guid in AssetDatabase.FindAssets("t:Model", new[] { ModelsDir }))
@@ -52,7 +55,8 @@ namespace Game.Editor
                 if (!name.StartsWith("Env_")) continue;
                 var model = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                 if (model == null) continue;
-                BuildPrefab(name, model, material);
+                bool sways = name.StartsWith("Env_Tree_") || name.StartsWith("Env_Bush_") || name.StartsWith("Env_Grass_");
+                BuildPrefab(name, model, sways ? foliage : material);
                 count++;
             }
             AssetDatabase.SaveAssets();
@@ -120,15 +124,39 @@ namespace Game.Editor
             return b;
         }
 
-        public static Material GetOrCreateMaterial()
-        {
-            var mat = AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
-            if (mat != null) return mat;
+        /// <summary>Материал камней и всего неподвижного: toon-шейдер + палитра.</summary>
+        public static Material GetOrCreateMaterial() => GetOrCreate(MaterialPath, "M_Env_Forest", wind: 0f);
 
-            EnsureFolder(Path.GetDirectoryName(MaterialPath).Replace('\\', '/'));
-            var shader = Shader.Find("Game/Stylized Toon");
-            if (shader == null) shader = MaterialFactory.LitShader;
-            mat = new Material(shader) { name = "M_Env_Forest" };
+        /// <summary>Материал листвы (деревья, кусты, трава): то же самое + лёгкое покачивание на ветру.</summary>
+        public static Material GetOrCreateFoliageMaterial() => GetOrCreate(FoliageMaterialPath, "M_Env_Forest_Foliage", wind: 0.05f);
+
+        /// <summary>
+        /// Создаёт материал или переводит существующий (например, старый на URP Lit) на toon-шейдер.
+        /// Настройки задаются только при создании/переводе, так что ручные правки в инспекторе не затираются.
+        /// </summary>
+        private static Material GetOrCreate(string path, string name, float wind)
+        {
+            var shader = Shader.Find(ToonShaderName);
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat != null)
+            {
+                if (shader == null || mat.shader == shader) return mat;
+                mat.shader = shader;
+                ApplyToonDefaults(mat, wind);
+                EditorUtility.SetDirty(mat);
+                Debug.Log($"[Game] {name}: переведён на шейдер {ToonShaderName}");
+                return mat;
+            }
+
+            EnsureFolder(Path.GetDirectoryName(path).Replace('\\', '/'));
+            mat = new Material(shader != null ? shader : MaterialFactory.LitShader) { name = name };
+            ApplyToonDefaults(mat, wind);
+            AssetDatabase.CreateAsset(mat, path);
+            return mat;
+        }
+
+        private static void ApplyToonDefaults(Material mat, float wind)
+        {
             var palette = AssetDatabase.LoadAssetAtPath<Texture2D>(PalettePath);
             if (palette != null)
             {
@@ -140,8 +168,22 @@ namespace Game.Editor
             if (mat.HasProperty("_Color")) mat.SetColor("_Color", Color.white);
             if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0f);
             if (mat.HasProperty("_Glossiness")) mat.SetFloat("_Glossiness", 0f);
-            AssetDatabase.CreateAsset(mat, MaterialPath);
-            return mat;
+
+            if (mat.shader.name != ToonShaderName) return;
+            // у моделей из Blender нет вершинных цветов: цвет берётся только из палитры
+            mat.SetFloat("_UseVertexColors", 0f);
+            mat.DisableKeyword("_VERTEX_COLORS");
+            mat.SetFloat("_Variation", 0.07f);
+            // сумеречные настройки: тени в фиолет, тёплый контровой обвод от низкого солнца
+            mat.SetColor("_ShadowColor", new Color(0.36f, 0.32f, 0.58f));
+            mat.SetColor("_GradientBottom", new Color(0.62f, 0.6f, 0.78f));
+            mat.SetFloat("_GradientHeight", wind > 0f ? 3.5f : 1.5f);
+            mat.SetColor("_RimColor", new Color(1f, 0.72f, 0.48f));
+            mat.SetFloat("_RimStrength", 0.35f);
+            mat.SetFloat("_RimPower", 3f);
+            mat.SetFloat("_AmbientStrength", 0.45f);
+            mat.SetFloat("_WindStrength", wind);
+            mat.SetFloat("_WindSpeed", 1.1f);
         }
 
         public static void EnsureFolder(string path)

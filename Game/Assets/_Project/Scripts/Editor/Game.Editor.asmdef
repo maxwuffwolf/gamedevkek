@@ -1,7 +1,7 @@
 {
     "name": "Game.Editor",
     "rootNamespace": "Game.Editor",
-    "references": ["Game.Core","Game.Data","Game.Gameplay","Game.Meta","Game.UI","Game.App"],
+    "references": ["Game.Core","Game.Data","Game.Gameplay","Game.Meta","Game.UI","Game.App","Unity.RenderPipelines.Core.Runtime","Unity.RenderPipelines.Universal.Runtime"],
     "includePlatforms": ["Editor"],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
