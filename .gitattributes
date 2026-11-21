@@ -45,3 +45,6 @@
 *.unitypackage filter=lfs diff=lfs merge=lfs -text
 LightingData.asset filter=lfs diff=lfs merge=lfs -text
 *.navmesh  filter=lfs diff=lfs merge=lfs -text
+
+# Палитры окружения крошечные (несколько КБ) и храним их в обычном git, без LFS
+**/T_Palette_*.png -filter -diff -merge binary
