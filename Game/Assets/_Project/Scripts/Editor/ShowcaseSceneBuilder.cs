@@ -146,6 +146,7 @@ namespace Game.Editor
             l.intensity = 4.5f;
             l.shadows = LightShadows.Soft; // в сумерках костёр — главный тёплый свет, пусть отбрасывает тени
             l.shadowStrength = 0.7f;
+            l.shadowResolution = LightShadowResolution.Low; // точечный свет = 6 теневых карт, на средних они не влезают в атлас
             var flicker = lightGo.AddComponent<LightFlicker>();
             flicker.BaseIntensity = 4.5f;
             flicker.Amount = 0.8f;

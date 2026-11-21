@@ -210,6 +210,7 @@ namespace Game.Editor
         /// <summary>Две скрещенные вертикальные полоски 1×1, низ в нуле. Сохраняется ассетом, чтобы сцена на него ссылалась.</summary>
         private static Mesh ShaftMesh()
         {
+            EnvironmentPrefabs.EnsureFolder(Dir);
             string path = Dir + "/SM_LightShaft.asset";
             var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
             bool created = mesh == null;
@@ -445,6 +446,7 @@ namespace Game.Editor
 
         private static Material GetOrCreateMaterial(string name, string shaderName, System.Action<Material> setup)
         {
+            EnvironmentPrefabs.EnsureFolder(Dir);
             string path = $"{Dir}/{name}.mat";
             var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
             var shader = Shader.Find(shaderName);
