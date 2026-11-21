@@ -33,7 +33,7 @@ namespace Game.Gameplay.Actors
         private Renderer _body, _eyes, _brows, _hair, _crystal;
         private Light _crystalLight;
         private readonly Dictionary<string, GameObject> _weapons = new();
-        private readonly MaterialPropertyBlock _mpb = new();
+        private MaterialPropertyBlock _mpb; // создаём в Awake: Unity не разрешает это в инициализаторе поля
 
         private AppearanceDef _def = new();
         private Inventory _inventory;
@@ -58,6 +58,7 @@ namespace Game.Gameplay.Actors
 
         private void Awake()
         {
+            _mpb = new MaterialPropertyBlock();
             foreach (var r in GetComponentsInChildren<Renderer>(true))
             {
                 string n = r.gameObject.name;
