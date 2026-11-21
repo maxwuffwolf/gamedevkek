@@ -1,0 +1,9 @@
+{
+  "npcs": [
+    {
+      "id": "npc_elder", "name": "Торвальд", "title": "Старейшина", "prefab": "npc_elder",
+      "dialogue": "dlg_elder",
+      "placeholder": { "model": "npc", "color": "#6B4F9E", "accent": "#3B2A5A", "scale": 1.0 }
+    }
+  ]
+}

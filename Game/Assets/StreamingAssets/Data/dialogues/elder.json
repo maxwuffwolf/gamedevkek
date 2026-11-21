@@ -1,0 +1,83 @@
+{
+  "_comment": "Диалог: start — первый подходящий узел по условию. Вариант без next закрывает окно. Условия/действия: см. DialogueService.",
+  "dialogues": [
+    {
+      "id": "dlg_elder",
+      "start": [
+        { "if": "quest.ready:q_wolves", "node": "wolves_done" },
+        { "if": "quest.active:q_wolves", "node": "wolves_progress" },
+        { "if": "quest.ready:q_alpha", "node": "alpha_done" },
+        { "if": "quest.active:q_alpha", "node": "alpha_progress" },
+        { "if": "quest.available:q_wolves", "node": "greet" },
+        { "if": "quest.available:q_alpha", "node": "alpha_offer" },
+        { "node": "idle" }
+      ],
+      "nodes": {
+        "greet": {
+          "text": "А, путник! Хорошо, что ты здесь. Волки совсем обнаглели: режут скот прямо у околицы, люди боятся выйти за ворота.",
+          "options": [
+            { "text": "Чем я могу помочь?", "next": "wolves_offer" },
+            { "text": "Кто ты такой?", "next": "about" },
+            { "text": "Мне пора." }
+          ]
+        },
+        "about": {
+          "text": "Я Торвальд, старейшина этой деревушки. Когда-то и сам ходил на зверя, да колени уже не те.",
+          "options": [ { "text": "Понятно. Так что там с волками?", "next": "wolves_offer" } ]
+        },
+        "wolves_offer": {
+          "text": "Убей пятерых волков, что рыщут к северу от лагеря. Заплачу золотом, а ещё дам ремни, чтобы рюкзак стал вместительнее.",
+          "options": [
+            { "text": "Берусь.", "next": "accepted", "actions": ["quest.accept:q_wolves"] },
+            { "text": "Не сейчас." }
+          ]
+        },
+        "accepted": {
+          "text": "Удачи! Бей левой кнопкой мыши, а если станет туго, на клавише 1 у тебя тяжёлый удар. И подбирай всё, что светится: чем ярче луч, тем ценнее добыча.",
+          "options": [ { "text": "Иду." } ]
+        },
+        "wolves_progress": {
+          "text": "Как охота? {progress:q_wolves}",
+          "options": [ { "text": "Работаю над этим." } ]
+        },
+        "wolves_done": {
+          "text": "Пятеро! Отличная работа. Вот обещанное: золото, пояс и ремни для рюкзака.",
+          "options": [ { "text": "Спасибо!", "next": "after_wolves", "actions": ["quest.turnin:q_wolves"] } ]
+        },
+        "after_wolves": {
+          "text": "Только вот что... Охотники видели у старых камней на севере огромного вожака. Пока он жив, стая вернётся.",
+          "options": [
+            { "text": "Я разберусь с ним.", "actions": ["quest.accept:q_alpha"] },
+            { "text": "Позже." }
+          ]
+        },
+        "alpha_offer": {
+          "text": "Вожак всё ещё бродит у старых камней на севере. Возьмёшься?",
+          "options": [
+            { "text": "Да, я разберусь с ним.", "actions": ["quest.accept:q_alpha"] },
+            { "text": "Позже." }
+          ]
+        },
+        "alpha_progress": {
+          "text": "Вожак ещё жив? Будь осторожен, он вдвое крупнее обычного волка.",
+          "options": [ { "text": "Скоро вернусь." } ]
+        },
+        "alpha_done": {
+          "text": "Ты одолел вожака! Возьми этот амулет из его клыка, он принесёт тебе удачу.",
+          "options": [ { "text": "Это было непросто.", "next": "idle", "actions": ["quest.turnin:q_alpha"] } ]
+        },
+        "idle": {
+          "text": "Спасибо тебе, путник. В деревне стало спокойнее. Заходи, если понадобится помощь.",
+          "options": [
+            { "text": "Подлечи меня, старик.", "next": "healed", "actions": ["heal"] },
+            { "text": "До встречи." }
+          ]
+        },
+        "healed": {
+          "text": "Вот так-то лучше. Береги себя.",
+          "options": [ { "text": "Спасибо." } ]
+        }
+      }
+    }
+  ]
+}

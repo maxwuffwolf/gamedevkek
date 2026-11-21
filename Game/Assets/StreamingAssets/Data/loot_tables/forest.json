@@ -1,0 +1,29 @@
+{
+  "lootTables": [
+    {
+      "id": "wolf",
+      "rolls": [1, 2],
+      "noDropWeight": 420,
+      "entries": [
+        { "type": "Currency", "id": "gold", "amount": [2, 8], "weight": 300 },
+        { "type": "ItemByTag", "tags": ["armor"], "weight": 170 },
+        { "type": "ItemByTag", "tags": ["weapon"], "weight": 80 },
+        { "type": "ItemByTag", "tags": ["jewelry"], "weight": 40 },
+        { "type": "Item", "id": "hood_wolf", "weight": 40 }
+      ],
+      "rarityWeights": { "common": 600, "uncommon": 280, "rare": 95, "epic": 22, "legendary": 3 }
+    },
+    {
+      "id": "wolf_alpha",
+      "rolls": [2, 3],
+      "noDropWeight": 80,
+      "entries": [
+        { "type": "Table", "id": "wolf", "weight": 300 },
+        { "type": "Item", "id": "amulet_fang", "weight": 80 },
+        { "type": "ItemByTag", "tags": ["jewelry"], "weight": 60 },
+        { "type": "Currency", "id": "gold", "amount": [15, 40], "weight": 150 }
+      ],
+      "rarityWeights": { "common": 250, "uncommon": 400, "rare": 250, "epic": 85, "legendary": 15 }
+    }
+  ]
+}

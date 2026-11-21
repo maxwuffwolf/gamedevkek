@@ -1,0 +1,29 @@
+{
+  "_comment": "Мобы. stats — на baseLevel, scaling — прирост за уровень (0.15 = +15%). prefab — id визуала (ActorVisual), пока нет — строится placeholder.",
+  "monsters": [
+    {
+      "id": "wolf", "name": "Серый волк", "prefab": "wolf",
+      "ai": "melee_basic", "baseLevel": 1,
+      "stats": { "MaxHealth": 38, "Armor": 2, "MoveSpeed": 4.6, "PhysDamage": 5, "AttackSpeed": 1.0, "CritChance": 5, "CritMulti": 150 },
+      "scaling": { "MaxHealth": 0.15, "PhysDamage": 0.1 },
+      "skills": ["wolf_bite"],
+      "aggroRange": 8, "leashRange": 20, "attackRange": 1.4, "wanderRadius": 4,
+      "xp": 12, "lootTable": "wolf",
+      "tags": ["wolf", "beast"],
+      "placeholder": { "model": "wolf", "color": "#7A7A82", "accent": "#55555C", "scale": 1.0 },
+      "corpseSeconds": 2.5
+    },
+    {
+      "id": "wolf_alpha", "name": "Вожак стаи", "prefab": "wolf_alpha",
+      "ai": "melee_basic", "baseLevel": 3,
+      "stats": { "MaxHealth": 160, "Armor": 8, "MoveSpeed": 5.0, "PhysDamage": 11, "AttackSpeed": 0.9, "CritChance": 10, "CritMulti": 175 },
+      "scaling": { "MaxHealth": 0.15, "PhysDamage": 0.1 },
+      "skills": ["alpha_maul"],
+      "aggroRange": 10, "leashRange": 22, "attackRange": 1.9, "wanderRadius": 3,
+      "xp": 70, "lootTable": "wolf_alpha",
+      "tags": ["wolf", "beast", "elite"],
+      "placeholder": { "model": "wolf", "color": "#3A373F", "accent": "#C8C8D2", "scale": 1.45 },
+      "corpseSeconds": 3.5
+    }
+  ]
+}

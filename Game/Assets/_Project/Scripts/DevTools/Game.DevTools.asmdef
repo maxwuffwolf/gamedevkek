@@ -1,0 +1,14 @@
+{
+    "name": "Game.DevTools",
+    "rootNamespace": "Game.DevTools",
+    "references": ["Game.Core","Game.Data","Game.Gameplay","Game.Meta","Game.UI"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": ["UNITY_EDITOR || DEVELOPMENT_BUILD"],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

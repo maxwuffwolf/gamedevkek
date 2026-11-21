@@ -1,0 +1,29 @@
+{
+  "items": [
+    { "id": "cap_leather", "name": "Кожаная шапка", "slot": "Head", "category": "Helmet", "dropLevel": 1,
+      "implicit": [{ "stat": "Armor", "type": "Flat", "value": [3, 5] }],
+      "tags": ["armor", "helmet"], "icon": { "color": "#8B5A2B", "text": "Шп" } },
+    { "id": "hood_wolf", "name": "Капюшон из волчьей шкуры", "slot": "Head", "category": "Helmet", "levelReq": 2, "dropLevel": 1,
+      "implicit": [{ "stat": "Armor", "type": "Flat", "value": [4, 6] }, { "stat": "MoveSpeed", "type": "Increased", "value": [3, 5] }],
+      "tags": ["armor", "helmet"], "icon": { "color": "#6E6E78", "text": "Кп" },
+      "description": "Ещё пахнет лесом." },
+    { "id": "pauldrons_leather", "name": "Кожаные наплечники", "slot": "Shoulders", "category": "Shoulders", "dropLevel": 1,
+      "implicit": [{ "stat": "Armor", "type": "Flat", "value": [3, 6] }],
+      "tags": ["armor", "shoulders"], "icon": { "color": "#7D5532", "text": "Нп" } },
+    { "id": "vest_leather", "name": "Кожаная куртка", "slot": "Chest", "category": "Chest", "dropLevel": 1,
+      "implicit": [{ "stat": "Armor", "type": "Flat", "value": [8, 12] }],
+      "tags": ["armor", "chest"], "icon": { "color": "#94643A", "text": "Кр" } },
+    { "id": "gloves_leather", "name": "Кожаные перчатки", "slot": "Hands", "category": "Gloves", "dropLevel": 1,
+      "implicit": [{ "stat": "Armor", "type": "Flat", "value": [2, 4] }, { "stat": "AttackSpeed", "type": "Increased", "value": [3, 6] }],
+      "tags": ["armor", "gloves"], "icon": { "color": "#A0703F", "text": "Пр" } },
+    { "id": "belt_rope", "name": "Верёвочный пояс", "slot": "Waist", "category": "Belt", "dropLevel": 1,
+      "implicit": [{ "stat": "MaxHealth", "type": "Flat", "value": [8, 15] }],
+      "tags": ["armor", "belt"], "icon": { "color": "#B49B6E", "text": "Пс" } },
+    { "id": "pants_cloth", "name": "Холщовые штаны", "slot": "Legs", "category": "Pants", "dropLevel": 1,
+      "implicit": [{ "stat": "Armor", "type": "Flat", "value": [3, 6] }],
+      "tags": ["armor", "pants"], "icon": { "color": "#5A6E8C", "text": "Шт" } },
+    { "id": "boots_leather", "name": "Кожаные сапоги", "slot": "Feet", "category": "Boots", "dropLevel": 1,
+      "implicit": [{ "stat": "Armor", "type": "Flat", "value": [2, 4] }, { "stat": "MoveSpeed", "type": "Increased", "value": [4, 8] }],
+      "tags": ["armor", "boots"], "icon": { "color": "#6B4628", "text": "Сп" } }
+  ]
+}
