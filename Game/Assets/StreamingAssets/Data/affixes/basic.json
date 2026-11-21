@@ -1,0 +1,37 @@
+{
+  "_comment": "Аффиксы: случайные свойства магических предметов. group — не больше одного аффикса группы на предмете. allowedTags — на какие базы может выпасть. Тир доступен, если ilvl предмета >= ilvl тира.",
+  "affixes": [
+    { "id": "pre_phys_flat", "kind": "Prefix", "group": "phys_flat", "allowedTags": ["weapon", "ring"],
+      "tiers": [
+        { "tier": 3, "ilvl": 1, "weight": 1000, "name": "Острый",      "mods": [{ "stat": "PhysDamage", "type": "Flat", "value": [1, 3] }] },
+        { "tier": 2, "ilvl": 5, "weight": 500,  "name": "Зазубренный", "mods": [{ "stat": "PhysDamage", "type": "Flat", "value": [3, 6] }] }
+      ] },
+    { "id": "pre_phys_inc", "kind": "Prefix", "group": "phys_inc", "allowedTags": ["weapon"],
+      "tiers": [
+        { "tier": 2, "ilvl": 1, "weight": 600, "name": "Тяжёлый", "mods": [{ "stat": "PhysDamage", "type": "Increased", "value": [10, 20] }] },
+        { "tier": 1, "ilvl": 6, "weight": 250, "name": "Жестокий", "mods": [{ "stat": "PhysDamage", "type": "Increased", "value": [21, 35] }] }
+      ] },
+    { "id": "pre_armor_flat", "kind": "Prefix", "group": "armor_flat", "allowedTags": ["armor"],
+      "tiers": [
+        { "tier": 2, "ilvl": 1, "weight": 1000, "name": "Прочный",  "mods": [{ "stat": "Armor", "type": "Flat", "value": [3, 8] }] },
+        { "tier": 1, "ilvl": 6, "weight": 400,  "name": "Кованый",  "mods": [{ "stat": "Armor", "type": "Flat", "value": [9, 16] }] }
+      ] },
+    { "id": "pre_health", "kind": "Prefix", "group": "health", "allowedTags": ["armor", "jewelry"],
+      "tiers": [
+        { "tier": 2, "ilvl": 1, "weight": 1000, "name": "Здоровый", "mods": [{ "stat": "MaxHealth", "type": "Flat", "value": [8, 15] }] },
+        { "tier": 1, "ilvl": 6, "weight": 400,  "name": "Могучий",  "mods": [{ "stat": "MaxHealth", "type": "Flat", "value": [16, 30] }] }
+      ] },
+    { "id": "suf_attack_speed", "kind": "Suffix", "group": "attack_speed", "allowedTags": ["weapon", "gloves", "ring"],
+      "tiers": [ { "tier": 1, "ilvl": 1, "weight": 600, "name": "быстроты", "mods": [{ "stat": "AttackSpeed", "type": "Increased", "value": [4, 9] }] } ] },
+    { "id": "suf_crit", "kind": "Suffix", "group": "crit", "allowedTags": ["weapon", "jewelry", "gloves"],
+      "tiers": [ { "tier": 1, "ilvl": 1, "weight": 500, "name": "меткости", "mods": [{ "stat": "CritChance", "type": "Flat", "value": [1, 3] }] } ] },
+    { "id": "suf_mana", "kind": "Suffix", "group": "mana", "allowedTags": ["jewelry", "helmet", "chest"],
+      "tiers": [ { "tier": 1, "ilvl": 1, "weight": 700, "name": "разума", "mods": [{ "stat": "MaxMana", "type": "Flat", "value": [5, 12] }] } ] },
+    { "id": "suf_mana_regen", "kind": "Suffix", "group": "mana_regen", "allowedTags": ["jewelry", "helmet"],
+      "tiers": [ { "tier": 1, "ilvl": 1, "weight": 500, "name": "сосредоточения", "mods": [{ "stat": "ManaRegen", "type": "Flat", "value": [0.5, 1.5] }] } ] },
+    { "id": "suf_hp_regen", "kind": "Suffix", "group": "hp_regen", "allowedTags": ["armor"],
+      "tiers": [ { "tier": 1, "ilvl": 1, "weight": 500, "name": "восстановления", "mods": [{ "stat": "HealthRegen", "type": "Flat", "value": [0.5, 2] }] } ] },
+    { "id": "suf_move", "kind": "Suffix", "group": "move", "allowedTags": ["boots"],
+      "tiers": [ { "tier": 1, "ilvl": 1, "weight": 800, "name": "ветра", "mods": [{ "stat": "MoveSpeed", "type": "Increased", "value": [5, 10] }] } ] }
+  ]
+}

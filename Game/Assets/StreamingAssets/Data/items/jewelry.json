@@ -1,0 +1,14 @@
+{
+  "items": [
+    { "id": "amulet_fang", "name": "Амулет из клыка", "slot": "Neck", "category": "Amulet", "levelReq": 2, "dropLevel": 2,
+      "implicit": [{ "stat": "CritChance", "type": "Flat", "value": [2, 4] }],
+      "tags": ["jewelry", "amulet"], "icon": { "color": "#E6DCC3", "text": "Ам" },
+      "description": "Клык вожака. Говорят, приносит удачу охотнику." },
+    { "id": "ring_copper", "name": "Медное кольцо", "slot": "Ring", "category": "Ring", "dropLevel": 1,
+      "implicit": [{ "stat": "MaxMana", "type": "Flat", "value": [8, 15] }],
+      "tags": ["jewelry", "ring"], "icon": { "color": "#C87D46", "text": "Кл" } },
+    { "id": "ring_bone", "name": "Костяное кольцо", "slot": "Ring", "category": "Ring", "dropLevel": 1,
+      "implicit": [{ "stat": "PhysDamage", "type": "Flat", "value": [1, 2] }],
+      "tags": ["jewelry", "ring"], "icon": { "color": "#DCD7C8", "text": "Кк" } }
+  ]
+}

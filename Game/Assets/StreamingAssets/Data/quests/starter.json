@@ -1,0 +1,22 @@
+{
+  "_comment": "Квесты. objectives: Kill по monster (id) или tag. rewards.backpackSlots открывает ячейки рюкзака.",
+  "quests": [
+    {
+      "id": "q_wolves", "name": "Волчья напасть",
+      "description": "Волки режут скот у околицы. Торвальд просит убить пятерых.",
+      "giver": "npc_elder",
+      "objectives": [{ "type": "Kill", "tag": "wolf", "count": 5, "text": "Убить волков" }],
+      "rewards": { "xp": 150, "gold": 50, "items": [{ "id": "belt_rope", "rarity": "uncommon" }], "backpackSlots": 8 },
+      "readyText": "Волков достаточно. Возвращайтесь к Торвальду."
+    },
+    {
+      "id": "q_alpha", "name": "Вожак стаи",
+      "description": "Огромный вожак водит стаю у старых камней на севере.",
+      "giver": "npc_elder",
+      "prerequisites": ["q_wolves"],
+      "objectives": [{ "type": "Kill", "monster": "wolf_alpha", "count": 1, "text": "Убить вожака стаи" }],
+      "rewards": { "xp": 250, "gold": 120, "items": [{ "id": "amulet_fang", "rarity": "rare" }], "backpackSlots": 4 },
+      "readyText": "Вожак повержен! Торвальд будет рад."
+    }
+  ]
+}

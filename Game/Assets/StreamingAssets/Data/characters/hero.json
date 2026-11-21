@@ -1,0 +1,25 @@
+{
+  "_comment": "Герой. stats — база на 1 уровне, perLevel — прирост за уровень. skillBar — 12 слотов (клавиши 1..0, -, =).",
+  "characters": [
+    {
+      "id": "hero", "name": "Странник", "prefab": "hero",
+      "stats": {
+        "MaxHealth": 120, "MaxMana": 60, "HealthRegen": 1.0, "ManaRegen": 3.0,
+        "Armor": 5, "MoveSpeed": 5.5, "AttackSpeed": 1.25, "PhysDamage": 7,
+        "CritChance": 5, "CritMulti": 150
+      },
+      "perLevel": { "MaxHealth": 12, "MaxMana": 4, "PhysDamage": 1.2 },
+      "basicAttack": "basic_attack",
+      "skillBar": ["heavy_strike"],
+      "backpack": { "size": 40, "unlocked": 12 },
+      "startingItems": [
+        { "id": "sword_rusty", "rarity": "common", "equip": true },
+        { "id": "vest_leather", "rarity": "common", "equip": true },
+        { "id": "boots_leather", "rarity": "common", "equip": false }
+      ],
+      "xpCurve": { "base": 100, "growth": 1.45 },
+      "placeholder": { "model": "humanoid", "color": "#3A6EA5", "accent": "#5A3D2A", "scale": 1.0 },
+      "respawnSeconds": 4
+    }
+  ]
+}

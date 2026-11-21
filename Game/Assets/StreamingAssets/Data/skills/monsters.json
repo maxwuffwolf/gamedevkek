@@ -1,0 +1,18 @@
+{
+  "skills": [
+    {
+      "id": "wolf_bite", "name": "Укус",
+      "behavior": "Melee", "cooldown": 1.0, "damageMultiplier": 1.0,
+      "shape": { "type": "Arc", "radius": 1.8, "angle": 90 },
+      "duration": 0.8, "hitFrame": 0.55, "usesAttackSpeed": true, "moveWhileCasting": 0,
+      "vfxColor": "#FF5050"
+    },
+    {
+      "id": "alpha_maul", "name": "Растерзать",
+      "behavior": "Melee", "cooldown": 1.6, "damageMultiplier": 1.0,
+      "shape": { "type": "Arc", "radius": 2.4, "angle": 140 },
+      "duration": 1.0, "hitFrame": 0.6, "usesAttackSpeed": true, "moveWhileCasting": 0,
+      "knockback": 5, "vfxColor": "#FF3030"
+    }
+  ]
+}

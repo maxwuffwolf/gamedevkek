@@ -1,0 +1,33 @@
+{
+  "items": [
+    {
+      "id": "sword_rusty", "name": "Ржавый меч", "slot": "MainHand", "category": "Sword",
+      "levelReq": 1, "dropLevel": 1,
+      "implicit": [{ "stat": "PhysDamage", "type": "Flat", "value": [3, 5] }],
+      "tags": ["weapon", "melee", "sword"],
+      "icon": { "color": "#9AA3AD", "text": "Мч" },
+      "description": "Видал лучшие времена."
+    },
+    {
+      "id": "axe_hand", "name": "Топорик", "slot": "MainHand", "category": "Axe",
+      "levelReq": 2, "dropLevel": 1,
+      "implicit": [{ "stat": "PhysDamage", "type": "Flat", "value": [5, 8] }, { "stat": "AttackSpeed", "type": "Increased", "value": -5 }],
+      "tags": ["weapon", "melee", "axe"],
+      "icon": { "color": "#8C6E4B", "text": "Тп" }
+    },
+    {
+      "id": "club_wood", "name": "Дубина", "slot": "MainHand", "category": "Mace",
+      "levelReq": 1, "dropLevel": 1,
+      "implicit": [{ "stat": "PhysDamage", "type": "Flat", "value": [2, 7] }],
+      "tags": ["weapon", "melee", "mace"],
+      "icon": { "color": "#6E5032", "text": "Дб" }
+    },
+    {
+      "id": "shield_wood", "name": "Деревянный щит", "slot": "OffHand", "category": "Shield",
+      "levelReq": 1, "dropLevel": 1,
+      "implicit": [{ "stat": "Armor", "type": "Flat", "value": [6, 10] }],
+      "tags": ["armor", "shield"],
+      "icon": { "color": "#7A5A3A", "text": "Щт" }
+    }
+  ]
+}
