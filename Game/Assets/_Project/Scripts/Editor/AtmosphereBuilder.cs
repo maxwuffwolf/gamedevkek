@@ -26,7 +26,7 @@ namespace Game.Editor
         /// Версия настроек атмосферы. Если поднять её, при следующей пересборке сцены профиль пост-обработки
         /// и материалы (эффекты, окружение) перезапишутся значениями из кода. Иначе ручные правки сохраняются.
         /// </summary>
-        public const int SettingsVersion = 2;
+        public const int SettingsVersion = 3;
         private const string VersionKey = "Game.Atmosphere.SettingsVersion";
 
         /// <summary>true, пока идёт пересборка, где ассеты нужно обновить до <see cref="SettingsVersion"/>.</summary>
@@ -40,20 +40,24 @@ namespace Game.Editor
             RefreshAssets = false;
         }
 
-        // --- палитра сумерек (золотой час: тепло, но читаемо)
-        public static readonly Color SunColor = new Color(1f, 0.72f, 0.48f);
-        public static readonly Color FillColor = new Color(0.55f, 0.62f, 0.95f);
-        public static readonly Color FogColor = new Color(0.6f, 0.55f, 0.68f);
-        public static readonly Color SkyAmbient = new Color(0.62f, 0.6f, 0.8f);
-        public static readonly Color EquatorAmbient = new Color(0.62f, 0.52f, 0.56f);
-        public static readonly Color GroundAmbient = new Color(0.3f, 0.27f, 0.32f);
-        public const float FogDensity = 0.009f;
+        // --- поздние сумерки, ~20:00–22:00: солнце село, ключевой свет — холодное небо/луна,
+        //     на западе догорает тёплая полоска заката, главные тёплые пятна — костёр, светлячки и свет героя
+        public static readonly Color SunColor = new Color(0.58f, 0.68f, 1f);      // лунный ключевой свет
+        public static readonly Color FillColor = new Color(1f, 0.5f, 0.3f);       // отсвет заката у горизонта
+        public static readonly Color FogColor = new Color(0.15f, 0.17f, 0.29f);
+        public static readonly Color SkyAmbient = new Color(0.26f, 0.3f, 0.52f);
+        public static readonly Color EquatorAmbient = new Color(0.25f, 0.22f, 0.36f);
+        public static readonly Color GroundAmbient = new Color(0.1f, 0.09f, 0.14f);
+        public const float FogDensity = 0.014f;
 
         /// <summary>
-        /// Солнце на западе, 40° над горизонтом: сбоку от камеры, так что у каждого объекта видна и светлая, и теневая сторона.
-        /// Ниже 35° плоская земля в toon-шейдере целиком уходит в «тень».
+        /// Луна высоко (50°): плоская земля в toon-шейдере остаётся в «светлой» ступени, всё читается.
+        /// Ниже 35° земля целиком уходит в «тень».
         /// </summary>
-        public static readonly Vector3 SunEuler = new Vector3(40f, 100f, 0f);
+        public static readonly Vector3 SunEuler = new Vector3(50f, 125f, 0f);
+
+        /// <summary>Закатный отсвет: почти горизонтально с запада, только подкрашивает западные бока.</summary>
+        public static readonly Vector3 AfterglowEuler = new Vector3(6f, 90f, 0f);
 
         /// <summary>Фейковые лучи сквозь кроны. С top-down камеры читаются как непонятные полосы, поэтому выключены.</summary>
         public static readonly bool LightShafts = false;
@@ -62,25 +66,25 @@ namespace Game.Editor
 
         public static void BuildLighting(Transform parent)
         {
-            var sunGo = new GameObject("Sun_Dusk");
+            var sunGo = new GameObject("Moon_Key");
             sunGo.transform.SetParent(parent);
             sunGo.transform.rotation = Quaternion.Euler(SunEuler);
             var sun = sunGo.AddComponent<Light>();
             sun.type = LightType.Directional;
             sun.color = SunColor;
-            sun.intensity = 1.9f;
+            sun.intensity = 0.95f;
             sun.shadows = LightShadows.Soft;
-            sun.shadowStrength = 0.75f;
+            sun.shadowStrength = 0.8f;
             RenderSettings.sun = sun;
 
-            // холодная «луна» с противоположной стороны: теневые стороны не проваливаются в чёрное
-            var fillGo = new GameObject("Fill_Moon");
+            // тёплый отсвет заката: даёт контраст тёплое/холодное, как в кино
+            var fillGo = new GameObject("Afterglow_West");
             fillGo.transform.SetParent(parent);
-            fillGo.transform.rotation = Quaternion.Euler(50f, SunEuler.y + 160f, 0f);
+            fillGo.transform.rotation = Quaternion.Euler(AfterglowEuler);
             var fill = fillGo.AddComponent<Light>();
             fill.type = LightType.Directional;
             fill.color = FillColor;
-            fill.intensity = 0.35f;
+            fill.intensity = 0.45f;
             fill.shadows = LightShadows.None;
 
             RenderSettings.ambientMode = AmbientMode.Trilight;
@@ -126,6 +130,7 @@ namespace Game.Editor
             volume.sharedProfile = GetOrCreateProfile();
 
             if (LightShafts) BuildLightShafts(root, rng);
+            BuildHeroLight(root);
             BuildGroundMist(root);
             BuildFireflies(root);
             BuildDew(root);
@@ -152,34 +157,34 @@ namespace Game.Editor
             tone.mode.Override(TonemappingMode.Neutral);
 
             var bloom = Add<Bloom>(profile);
-            bloom.threshold.Override(1f);
-            bloom.intensity.Override(0.6f);
+            bloom.threshold.Override(0.9f);
+            bloom.intensity.Override(1f);
             bloom.scatter.Override(0.7f);
             bloom.tint.Override(new Color(1f, 0.88f, 0.75f));
             bloom.highQualityFiltering.Override(true);
 
             var color = Add<ColorAdjustments>(profile);
-            color.postExposure.Override(0.3f);
-            color.contrast.Override(4f);
-            color.saturation.Override(8f);
+            color.postExposure.Override(0.15f);
+            color.contrast.Override(8f);
+            color.saturation.Override(4f);
 
             // чуть поднятые полутона — картинка светлее, но без белёсости
             var lgg = Add<LiftGammaGain>(profile);
             lgg.lift.Override(new Vector4(1f, 1f, 1f, 0.02f));
-            lgg.gamma.Override(new Vector4(1f, 1f, 1f, 0.12f));
+            lgg.gamma.Override(new Vector4(1f, 1f, 1f, 0.06f));
 
             var wb = Add<WhiteBalance>(profile);
-            wb.temperature.Override(5f);
+            wb.temperature.Override(-8f);
 
             // лёгкая кино-раскраска: тени холоднее, света теплее
             var split = Add<SplitToning>(profile);
-            split.shadows.Override(new Color(0.45f, 0.45f, 0.62f));
-            split.highlights.Override(new Color(1f, 0.82f, 0.62f));
+            split.shadows.Override(new Color(0.3f, 0.36f, 0.62f));
+            split.highlights.Override(new Color(1f, 0.74f, 0.5f));
             split.balance.Override(0f);
 
             var vignette = Add<Vignette>(profile);
-            vignette.color.Override(new Color(0.1f, 0.05f, 0.14f));
-            vignette.intensity.Override(0.2f);
+            vignette.color.Override(new Color(0.02f, 0.02f, 0.06f));
+            vignette.intensity.Override(0.32f);
             vignette.smoothness.Override(0.5f);
 
             EditorUtility.SetDirty(profile);
@@ -271,6 +276,22 @@ namespace Game.Editor
             return mesh;
         }
 
+        // --- свет вокруг героя (как «радиус света» в Diablo): ночью игрок всегда видит, что рядом
+
+        private static void BuildHeroLight(Transform parent)
+        {
+            var go = new GameObject("HeroLight");
+            go.transform.SetParent(parent);
+            go.transform.position = new Vector3(0f, 3f, -3f);
+            var l = go.AddComponent<Light>();
+            l.type = LightType.Point;
+            l.color = new Color(1f, 0.86f, 0.72f);
+            l.range = 9f;
+            l.intensity = 2.2f;
+            l.shadows = LightShadows.None;
+            go.AddComponent<Game.Gameplay.World.HeroLight>();
+        }
+
         // --- частицы
 
         private static void BuildGroundMist(Transform parent)
@@ -290,7 +311,7 @@ namespace Game.Editor
             main.startSpeed = new ParticleSystem.MinMaxCurve(0.02f, 0.12f);
             main.startSize = new ParticleSystem.MinMaxCurve(5f, 9f);
             main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
-            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.85f, 0.82f, 0.95f, 0.07f), new Color(0.95f, 0.86f, 0.88f, 0.05f));
+            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.42f, 0.48f, 0.7f, 0.1f), new Color(0.5f, 0.52f, 0.72f, 0.07f));
             main.maxParticles = 200;
 
             var em = ps.emission;
@@ -317,7 +338,7 @@ namespace Game.Editor
             {
                 SetAdditive(m);
                 m.SetColor("_Color", new Color(1f, 0.82f, 0.4f));
-                m.SetFloat("_Intensity", 6f);
+                m.SetFloat("_Intensity", 7f);
                 m.SetFloat("_Softness", 2.2f);
                 m.SetFloat("_SoftFade", 0f);
             });
@@ -329,10 +350,10 @@ namespace Game.Editor
             main.startSpeed = new ParticleSystem.MinMaxCurve(0f, 0.15f);
             main.startSize = new ParticleSystem.MinMaxCurve(0.12f, 0.22f);
             main.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.9f, 0.55f), new Color(0.8f, 1f, 0.6f));
-            main.maxParticles = 160;
+            main.maxParticles = 220;
 
             var em = ps.emission;
-            em.rateOverTime = 18f;
+            em.rateOverTime = 24f;
 
             var shape = ps.shape;
             shape.enabled = true;
