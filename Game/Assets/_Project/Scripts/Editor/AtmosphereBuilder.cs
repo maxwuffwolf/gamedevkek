@@ -1,3 +1,4 @@
+using System.Linq;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -21,17 +22,41 @@ namespace Game.Editor
         public const string Dir = "Assets/_Project/Art/Atmosphere";
         public const string VolumePath = Dir + "/Forest_Dusk_Volume.asset";
 
-        // --- палитра сумерек
-        public static readonly Color SunColor = new Color(1f, 0.6f, 0.36f);
-        public static readonly Color FillColor = new Color(0.46f, 0.55f, 0.95f);
-        public static readonly Color FogColor = new Color(0.44f, 0.4f, 0.56f);
-        public static readonly Color SkyAmbient = new Color(0.4f, 0.38f, 0.62f);
-        public static readonly Color EquatorAmbient = new Color(0.44f, 0.34f, 0.42f);
-        public static readonly Color GroundAmbient = new Color(0.13f, 0.11f, 0.17f);
-        public const float FogDensity = 0.018f;
+        /// <summary>
+        /// Версия настроек атмосферы. Если поднять её, при следующей пересборке сцены профиль пост-обработки
+        /// и материалы (эффекты, окружение) перезапишутся значениями из кода. Иначе ручные правки сохраняются.
+        /// </summary>
+        public const int SettingsVersion = 2;
+        private const string VersionKey = "Game.Atmosphere.SettingsVersion";
 
-        /// <summary>Солнце висит низко на северо-востоке: камера смотрит на север, свет идёт почти навстречу (контровой).</summary>
-        public static readonly Vector3 SunEuler = new Vector3(20f, 215f, 0f);
+        /// <summary>true, пока идёт пересборка, где ассеты нужно обновить до <see cref="SettingsVersion"/>.</summary>
+        public static bool RefreshAssets { get; private set; }
+
+        public static void BeginBuild() => RefreshAssets = EditorPrefs.GetInt(VersionKey, 0) < SettingsVersion;
+
+        public static void EndBuild()
+        {
+            if (RefreshAssets) EditorPrefs.SetInt(VersionKey, SettingsVersion);
+            RefreshAssets = false;
+        }
+
+        // --- палитра сумерек (золотой час: тепло, но читаемо)
+        public static readonly Color SunColor = new Color(1f, 0.72f, 0.48f);
+        public static readonly Color FillColor = new Color(0.55f, 0.62f, 0.95f);
+        public static readonly Color FogColor = new Color(0.6f, 0.55f, 0.68f);
+        public static readonly Color SkyAmbient = new Color(0.62f, 0.6f, 0.8f);
+        public static readonly Color EquatorAmbient = new Color(0.62f, 0.52f, 0.56f);
+        public static readonly Color GroundAmbient = new Color(0.3f, 0.27f, 0.32f);
+        public const float FogDensity = 0.009f;
+
+        /// <summary>
+        /// Солнце на западе, 40° над горизонтом: сбоку от камеры, так что у каждого объекта видна и светлая, и теневая сторона.
+        /// Ниже 35° плоская земля в toon-шейдере целиком уходит в «тень».
+        /// </summary>
+        public static readonly Vector3 SunEuler = new Vector3(40f, 100f, 0f);
+
+        /// <summary>Фейковые лучи сквозь кроны. С top-down камеры читаются как непонятные полосы, поэтому выключены.</summary>
+        public static readonly bool LightShafts = false;
 
         // ------------------------------------------------------------------ свет и туман
 
@@ -43,9 +68,9 @@ namespace Game.Editor
             var sun = sunGo.AddComponent<Light>();
             sun.type = LightType.Directional;
             sun.color = SunColor;
-            sun.intensity = 1.7f;
+            sun.intensity = 1.9f;
             sun.shadows = LightShadows.Soft;
-            sun.shadowStrength = 0.85f;
+            sun.shadowStrength = 0.75f;
             RenderSettings.sun = sun;
 
             // холодная «луна» с противоположной стороны: теневые стороны не проваливаются в чёрное
@@ -55,7 +80,7 @@ namespace Game.Editor
             var fill = fillGo.AddComponent<Light>();
             fill.type = LightType.Directional;
             fill.color = FillColor;
-            fill.intensity = 0.22f;
+            fill.intensity = 0.35f;
             fill.shadows = LightShadows.None;
 
             RenderSettings.ambientMode = AmbientMode.Trilight;
@@ -100,7 +125,7 @@ namespace Game.Editor
             volume.priority = 1f;
             volume.sharedProfile = GetOrCreateProfile();
 
-            BuildLightShafts(root, rng);
+            if (LightShafts) BuildLightShafts(root, rng);
             BuildGroundMist(root);
             BuildFireflies(root);
             BuildDew(root);
@@ -109,49 +134,53 @@ namespace Game.Editor
         private static VolumeProfile GetOrCreateProfile()
         {
             var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(VolumePath);
-            if (profile != null) return profile;
+            if (profile != null && !RefreshAssets) return profile;
 
-            profile = ScriptableObject.CreateInstance<VolumeProfile>();
-            AssetDatabase.CreateAsset(profile, VolumePath);
+            if (profile == null)
+            {
+                profile = ScriptableObject.CreateInstance<VolumeProfile>();
+                AssetDatabase.CreateAsset(profile, VolumePath);
+            }
+            else
+            {
+                foreach (var old in profile.components.ToArray()) Object.DestroyImmediate(old, true);
+                profile.components.Clear();
+            }
 
+            // Neutral, а не ACES: ACES красиво, но сильно темнит средние тона и съедает читаемость
             var tone = Add<Tonemapping>(profile);
-            tone.mode.Override(TonemappingMode.ACES);
+            tone.mode.Override(TonemappingMode.Neutral);
 
             var bloom = Add<Bloom>(profile);
-            bloom.threshold.Override(0.95f);
-            bloom.intensity.Override(0.9f);
-            bloom.scatter.Override(0.75f);
-            bloom.tint.Override(new Color(1f, 0.86f, 0.72f));
+            bloom.threshold.Override(1f);
+            bloom.intensity.Override(0.6f);
+            bloom.scatter.Override(0.7f);
+            bloom.tint.Override(new Color(1f, 0.88f, 0.75f));
             bloom.highQualityFiltering.Override(true);
 
             var color = Add<ColorAdjustments>(profile);
-            color.postExposure.Override(0.35f);
-            color.contrast.Override(12f);
-            color.saturation.Override(10f);
-            color.colorFilter.Override(new Color(1f, 0.96f, 0.98f));
+            color.postExposure.Override(0.3f);
+            color.contrast.Override(4f);
+            color.saturation.Override(8f);
+
+            // чуть поднятые полутона — картинка светлее, но без белёсости
+            var lgg = Add<LiftGammaGain>(profile);
+            lgg.lift.Override(new Vector4(1f, 1f, 1f, 0.02f));
+            lgg.gamma.Override(new Vector4(1f, 1f, 1f, 0.12f));
 
             var wb = Add<WhiteBalance>(profile);
-            wb.temperature.Override(6f);
-            wb.tint.Override(4f);
+            wb.temperature.Override(5f);
 
-            // кино-раскраска: тени в сине-фиолетовый, света в персиковый
+            // лёгкая кино-раскраска: тени холоднее, света теплее
             var split = Add<SplitToning>(profile);
-            split.shadows.Override(new Color(0.36f, 0.32f, 0.62f));
-            split.highlights.Override(new Color(1f, 0.74f, 0.5f));
-            split.balance.Override(-15f);
+            split.shadows.Override(new Color(0.45f, 0.45f, 0.62f));
+            split.highlights.Override(new Color(1f, 0.82f, 0.62f));
+            split.balance.Override(0f);
 
             var vignette = Add<Vignette>(profile);
-            vignette.color.Override(new Color(0.07f, 0.03f, 0.11f));
-            vignette.intensity.Override(0.32f);
-            vignette.smoothness.Override(0.45f);
-
-            // всё дальше ~24 м от камеры чуть плывёт — глубина кадра, герой при этом резкий
-            var dof = Add<DepthOfField>(profile);
-            dof.mode.Override(DepthOfFieldMode.Gaussian);
-            dof.gaussianStart.Override(24f);
-            dof.gaussianEnd.Override(55f);
-            dof.gaussianMaxRadius.Override(1.2f);
-            dof.highQualitySampling.Override(true);
+            vignette.color.Override(new Color(0.1f, 0.05f, 0.14f));
+            vignette.intensity.Override(0.2f);
+            vignette.smoothness.Override(0.5f);
 
             EditorUtility.SetDirty(profile);
             AssetDatabase.SaveAssets();
@@ -255,22 +284,22 @@ namespace Game.Editor
             });
             if (mat == null) return;
 
-            var ps = NewParticles(parent, "GroundMist", new Vector3(0f, 0.7f, 8f), mat);
+            var ps = NewParticles(parent, "GroundMist", new Vector3(0f, 0.5f, 8f), mat);
             var main = ps.main;
             main.startLifetime = new ParticleSystem.MinMaxCurve(14f, 22f);
             main.startSpeed = new ParticleSystem.MinMaxCurve(0.02f, 0.12f);
-            main.startSize = new ParticleSystem.MinMaxCurve(6f, 12f);
+            main.startSize = new ParticleSystem.MinMaxCurve(5f, 9f);
             main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
-            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.78f, 0.72f, 0.92f, 0.13f), new Color(0.92f, 0.78f, 0.86f, 0.09f));
-            main.maxParticles = 320;
+            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.85f, 0.82f, 0.95f, 0.07f), new Color(0.95f, 0.86f, 0.88f, 0.05f));
+            main.maxParticles = 200;
 
             var em = ps.emission;
-            em.rateOverTime = 18f;
+            em.rateOverTime = 11f;
 
             var shape = ps.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Box;
-            shape.scale = new Vector3(96f, 0.8f, 96f);
+            shape.scale = new Vector3(96f, 0.5f, 96f);
             shape.randomDirectionAmount = 1f;
 
             var rot = ps.rotationOverLifetime;
@@ -455,7 +484,7 @@ namespace Game.Editor
                 Debug.LogWarning($"[Game] Нет шейдера {shaderName} — эффект {name} пропущен. Проверь Console на ошибки шейдеров.");
                 return mat;
             }
-            if (mat != null && mat.shader == shader) return mat;
+            if (mat != null && mat.shader == shader && !RefreshAssets) return mat;
             if (mat == null)
             {
                 mat = new Material(shader) { name = name };

@@ -33,6 +33,7 @@ namespace Game.Editor
         {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             _rng = new System.Random(12345);
+            AtmosphereBuilder.BeginBuild();
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             Directory.CreateDirectory(GeneratedDir + "/Materials");
 
@@ -65,6 +66,7 @@ namespace Game.Editor
             AddSpawner(gameplay, "Spawner_Wolves_East", "wolf", new Vector3(14f, 0f, 16f), 3, 5f, new Vector2Int(1, 2), 15f);
             AddSpawner(gameplay, "Spawner_Wolf_Alpha", "wolf_alpha", new Vector3(0f, 0f, 31f), 1, 1.5f, new Vector2Int(3, 3), 60f);
 
+            AtmosphereBuilder.EndBuild();
             EditorSceneManager.SaveScene(scene, ScenePath);
             AddToBuildSettings(ScenePath);
             AssetDatabase.SaveAssets();
@@ -368,12 +370,13 @@ namespace Game.Editor
                 m = MaterialFactory.CreateLit(color);
                 AssetDatabase.CreateAsset(m, path);
             }
-            if (toon != null && m.shader != toon)
+            if (toon != null && (m.shader != toon || AtmosphereBuilder.RefreshAssets))
             {
                 m.shader = toon;
                 m.SetFloat("_UseVertexColors", 0f);
                 m.DisableKeyword("_VERTEX_COLORS");
-                m.SetColor("_ShadowColor", new Color(0.36f, 0.32f, 0.58f));
+                m.SetColor("_ShadowColor", new Color(0.52f, 0.48f, 0.72f));
+                m.SetFloat("_AmbientStrength", 0.6f);
                 m.SetColor("_RimColor", new Color(1f, 0.72f, 0.48f));
                 m.SetFloat("_RimStrength", 0.25f);
                 m.SetFloat("_GradientHeight", 1.5f);
