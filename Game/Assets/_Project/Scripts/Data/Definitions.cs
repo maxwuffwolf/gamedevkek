@@ -238,7 +238,37 @@ namespace Game.Data
         public XpCurveDef XpCurve = new();
         public PlaceholderDef Placeholder = new();
         public float RespawnSeconds = 4f;
+        /// <summary>Внешний вид настоящей модели (цвета, грязь, кристалл наруча, оружие в руке). Hot reload (F5).</summary>
+        public AppearanceDef Appearance = new();
         string IContentDef.Id => Id;
+    }
+
+    public sealed class AppearanceDef
+    {
+        public string HairColor = "#FFD26A";
+        public string BrowColor = "#C08A3A";
+        public string SkinTint = "#FFFFFF";
+        /// <summary>Правый глаз (Свет) и левый (Тьма), сила лёгкого свечения радужки.</summary>
+        public string EyeRight = "#FFB52E";
+        public string EyeLeft = "#6A2FC0";
+        public float EyeGlow = 0.6f;
+
+        /// <summary>Грязь/пепел/царапины на коже в начале (0..1) и сколько секунд длится умывание.</summary>
+        public float DirtStart = 1f;
+        public float WashSeconds = 3f;
+        public string DirtColor = "#5C5752";
+
+        /// <summary>Кристалл наруча: 0 — вся сила у Тьмы, 1 — у Света.</summary>
+        public float Balance = 0.5f;
+        public float CrystalGlow = 1.6f;
+        public string CrystalLight = "#FFB838";
+        public string CrystalDark = "#8C3CFF";
+        /// <summary>С какого расстояния наруч тянет энергию из убитых врагов (0 — выключено).</summary>
+        public float AbsorbRadius = 14f;
+
+        /// <summary>id предмета → имя модели оружия внутри Hero.fbx. Оружие без модели показывает DefaultWeapon.</summary>
+        public Dictionary<string, string> Weapons = new();
+        public string DefaultWeapon;
     }
 
     // ---------------------------------------------------------------- NPC, квесты, диалоги

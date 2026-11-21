@@ -4,7 +4,7 @@
     {
       "id": "basic_attack", "name": "Удар",
       "description": "Обычная атака оружием. Зажми ЛКМ, чтобы бить без остановки.",
-      "behavior": "Melee", "cooldown": 0, "cost": {},
+      "behavior": "Melee", "animation": "Attack", "cooldown": 0, "cost": {},
       "damageMultiplier": 1.0,
       "shape": { "type": "Arc", "radius": 2.3, "angle": 120 },
       "duration": 0.55, "hitFrame": 0.5, "usesAttackSpeed": true, "moveWhileCasting": 0.5,
@@ -15,7 +15,7 @@
     {
       "id": "heavy_strike", "name": "Тяжёлый удар",
       "description": "Мощный размашистый удар: 260% урона по всем врагам в широкой дуге и отбрасывание.",
-      "behavior": "Melee", "cooldown": 4, "cost": { "Mana": 18 },
+      "behavior": "Melee", "animation": "HeavyAttack", "cooldown": 4, "cost": { "Mana": 18 },
       "damageMultiplier": 2.6,
       "shape": { "type": "Arc", "radius": 3.2, "angle": 170 },
       "duration": 0.85, "hitFrame": 0.6, "usesAttackSpeed": true, "moveWhileCasting": 0.15,
