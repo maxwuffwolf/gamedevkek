@@ -140,7 +140,7 @@ namespace Game.Editor
             var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (mat != null)
             {
-                if (shader == null || mat.shader == shader) return mat;
+                if (shader == null || (mat.shader == shader && !AtmosphereBuilder.RefreshAssets)) return mat;
                 mat.shader = shader;
                 ApplyToonDefaults(mat, wind);
                 EditorUtility.SetDirty(mat);
@@ -175,13 +175,13 @@ namespace Game.Editor
             mat.DisableKeyword("_VERTEX_COLORS");
             mat.SetFloat("_Variation", 0.07f);
             // сумеречные настройки: тени в фиолет, тёплый контровой обвод от низкого солнца
-            mat.SetColor("_ShadowColor", new Color(0.36f, 0.32f, 0.58f));
-            mat.SetColor("_GradientBottom", new Color(0.62f, 0.6f, 0.78f));
+            mat.SetColor("_ShadowColor", new Color(0.52f, 0.48f, 0.72f));
+            mat.SetColor("_GradientBottom", new Color(0.78f, 0.76f, 0.88f));
             mat.SetFloat("_GradientHeight", wind > 0f ? 3.5f : 1.5f);
             mat.SetColor("_RimColor", new Color(1f, 0.72f, 0.48f));
-            mat.SetFloat("_RimStrength", 0.35f);
+            mat.SetFloat("_RimStrength", 0.25f);
             mat.SetFloat("_RimPower", 3f);
-            mat.SetFloat("_AmbientStrength", 0.45f);
+            mat.SetFloat("_AmbientStrength", 0.6f);
             mat.SetFloat("_WindStrength", wind);
             mat.SetFloat("_WindSpeed", 1.1f);
         }
