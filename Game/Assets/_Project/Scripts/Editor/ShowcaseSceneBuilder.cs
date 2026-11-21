@@ -144,13 +144,13 @@ namespace Game.Editor
             var l = lightGo.AddComponent<Light>();
             l.type = LightType.Point;
             l.color = new Color(1f, 0.6f, 0.25f);
-            l.range = 12f;
-            l.intensity = 4.5f;
+            l.range = 14f;
+            l.intensity = 6f;
             l.shadows = LightShadows.Soft; // в сумерках костёр — главный тёплый свет, пусть отбрасывает тени
             l.shadowStrength = 0.7f;
             l.shadowResolution = LightShadowResolution.Low; // точечный свет = 6 теневых карт, на средних они не влезают в атлас
             var flicker = lightGo.AddComponent<LightFlicker>();
-            flicker.BaseIntensity = 4.5f;
+            flicker.BaseIntensity = 6f;
             flicker.Amount = 0.8f;
             AtmosphereBuilder.BuildEmbers(fire, fire.position + Vector3.up * 0.5f);
 
@@ -375,8 +375,8 @@ namespace Game.Editor
                 m.shader = toon;
                 m.SetFloat("_UseVertexColors", 0f);
                 m.DisableKeyword("_VERTEX_COLORS");
-                m.SetColor("_ShadowColor", new Color(0.52f, 0.48f, 0.72f));
-                m.SetFloat("_AmbientStrength", 0.6f);
+                m.SetColor("_ShadowColor", new Color(0.38f, 0.4f, 0.66f));
+                m.SetFloat("_AmbientStrength", 0.75f);
                 m.SetColor("_RimColor", new Color(1f, 0.72f, 0.48f));
                 m.SetFloat("_RimStrength", 0.25f);
                 m.SetFloat("_GradientHeight", 1.5f);
