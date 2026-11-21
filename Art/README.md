@@ -4,3 +4,5 @@
 - `References/` — референсы, скриншоты, мудборды
 
 Все бинарники идут через Git LFS (см. `.gitattributes`).
+
+Как моделить и красить природу под стиль игры: [docs/10-blender-environment.md](../docs/10-blender-environment.md).
