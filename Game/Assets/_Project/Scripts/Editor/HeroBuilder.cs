@@ -182,8 +182,21 @@ namespace Game.Editor
             var death = Clip("Death01");
             if (idle == null || walk == null || attack == null) return null;
 
-            AssetDatabase.DeleteAsset(ControllerPath);
-            var ac = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
+            // Контроллер не удаляем, а очищаем на месте: если удалить и создать заново по тому же пути,
+            // префаб в памяти продолжает ссылаться на старый (уничтоженный) объект → «Missing» в игре.
+            var ac = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
+            if (ac == null)
+            {
+                ac = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
+            }
+            else
+            {
+                foreach (var sub in AssetDatabase.LoadAllAssetsAtPath(ControllerPath))
+                    if (sub != null && sub != ac) AssetDatabase.RemoveObjectFromAsset(sub);
+                ac.parameters = new AnimatorControllerParameter[0];
+                ac.layers = new AnimatorControllerLayer[0];
+                ac.AddLayer("Base Layer");
+            }
             ac.AddParameter("Speed", AnimatorControllerParameterType.Float);
             ac.AddParameter(new AnimatorControllerParameter { name = "CastSpeed", type = AnimatorControllerParameterType.Float, defaultFloat = 1f });
             // длина клипа удара: AnimatorBridge подгоняет скорость анимации под длительность умения
