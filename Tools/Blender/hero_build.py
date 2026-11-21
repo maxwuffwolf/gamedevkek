@@ -794,9 +794,8 @@ def main():
     sword_hand = build_sword(random.Random(SEED + 1))
     place_sword_in_hand(arm, sword_hand)
 
-    # герой в исходнике смотрит в +Y; разворачиваем к «переду» Blender (-Y) → в Unity он смотрит в +Z
-    arm.rotation_euler = (0, 0, 0)
-    bpy.context.view_layer.update()
+    # Ориентацию базы не трогаем: в исходном FBX для Unity у Armature поворот 180° и герой смотрит в +Y,
+    # именно так после экспорта (-Z forward, Y up) он смотрит в +Z в Unity.
 
     prepare_textures(ubc, out)
     hero_objs = [arm] + [o for o in bpy.data.objects if o.type == "MESH"]
