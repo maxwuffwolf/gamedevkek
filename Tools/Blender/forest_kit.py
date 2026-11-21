@@ -152,7 +152,6 @@ def flatten_bottom(bm, frac=0.12):
 def build_object(name, parts, material):
     mesh = bpy.data.meshes.new(name)
     out = bmesh.new()
-    uv = out.loops.layers.uv.new("UVMap")
     for part in parts:
         bm = part.bm
         bm.normal_update()
@@ -161,7 +160,7 @@ def build_object(name, parts, material):
         span = max(zmax - zmin, 1e-4)
         t0, t1 = part.t_range
         tmp = bpy.data.meshes.new("tmp")
-        lay = bm.loops.layers.uv.verify()
+        lay = bm.loops.layers.uv.get("UVMap") or bm.loops.layers.uv.new("UVMap")
         for f in bm.faces:
             top = part.top_swatch and f.normal.z > part.top_dot
             sw = part.top_swatch if top else part.swatch

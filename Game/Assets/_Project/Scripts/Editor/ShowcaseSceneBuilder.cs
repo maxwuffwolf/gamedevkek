@@ -203,6 +203,13 @@ namespace Game.Editor
         {
             var forest = new GameObject("Forest").transform;
             forest.SetParent(parent);
+
+            // свои модели (Game → Окружение → Собрать префабы из моделей); если их нет — плейсхолдеры
+            var treePrefabs = EnvironmentPrefabs.Load("Tree");
+            var rockPrefabs = EnvironmentPrefabs.Load("Rock");
+            var bushPrefabs = EnvironmentPrefabs.Load("Bush");
+            var grassPrefabs = EnvironmentPrefabs.Load("Grass");
+
             var coneMesh = ConeMesh();
             var trunkMat = Mat("Trunk", new Color(0.36f, 0.25f, 0.16f));
             var leafMats = new[]
@@ -217,19 +224,15 @@ namespace Game.Editor
             for (int attempt = 0; attempt < 2000 && placed < 230; attempt++)
             {
                 var p = new Vector3(Range(-46f, 46f), 0f, Range(-46f, 46f));
-                float r = new Vector2(p.x, p.z).magnitude;
                 bool edge = Mathf.Abs(p.x) > 36f || Mathf.Abs(p.z) > 36f;
                 if (!edge)
                 {
                     // реже внутри, и не на лагере/тропе/логовах
                     if (_rng.NextDouble() > 0.25) continue;
-                    if (r < 12f) continue;
-                    if (Mathf.Abs(p.x) < 4f && p.z > 0f && p.z < 36f) continue;
-                    if (Vector3.Distance(p, new Vector3(-15f, 0f, 14f)) < 7f) continue;
-                    if (Vector3.Distance(p, new Vector3(14f, 0f, 16f)) < 7f) continue;
-                    if (Vector3.Distance(p, new Vector3(0f, 0f, 31f)) < 8f) continue;
+                    if (IsReserved(p, 12f, 7f)) continue;
                 }
-                Tree(forest, p, coneMesh, trunkMat, leafMats[_rng.Next(leafMats.Length)]);
+                if (treePrefabs.Length > 0) PlacePrefab(forest, treePrefabs, p, 0.85f, 1.25f);
+                else Tree(forest, p, coneMesh, trunkMat, leafMats[_rng.Next(leafMats.Length)]);
                 placed++;
             }
 
@@ -237,10 +240,50 @@ namespace Game.Editor
             {
                 var p = new Vector3(Range(-40f, 40f), 0f, Range(-40f, 40f));
                 if (p.magnitude < 11f || (Mathf.Abs(p.x) < 4f && p.z > 0f)) continue;
+                if (rockPrefabs.Length > 0)
+                {
+                    PlacePrefab(forest, rockPrefabs, p, 0.7f, 1.3f);
+                    continue;
+                }
                 float s = Range(0.5f, 1.6f);
                 var rock = Prop(PrimitiveType.Cube, forest, "Rock", p + Vector3.up * s * 0.25f, new Vector3(s, s * 0.7f, s * 1.2f), rockMat, true);
                 rock.transform.rotation = Quaternion.Euler(Range(-15f, 15f), Range(0f, 360f), Range(-15f, 15f));
             }
+
+            // кусты и трава — только если есть свои модели (у плейсхолдеров их нет)
+            for (int i = 0; bushPrefabs.Length > 0 && i < 90; i++)
+            {
+                var p = new Vector3(Range(-40f, 40f), 0f, Range(-40f, 40f));
+                if (IsReserved(p, 9.5f, 4f)) continue;
+                PlacePrefab(forest, bushPrefabs, p, 0.8f, 1.3f);
+            }
+            for (int i = 0; grassPrefabs.Length > 0 && i < 260; i++)
+            {
+                var p = new Vector3(Range(-40f, 40f), 0f, Range(-40f, 40f));
+                if (p.magnitude < 7f) continue;
+                PlacePrefab(forest, grassPrefabs, p, 0.8f, 1.4f);
+            }
+        }
+
+        /// <summary>Лагерь, тропа на север, логова волков и камни вожака — там не сажаем лес.</summary>
+        private static bool IsReserved(Vector3 p, float campRadius, float denRadius)
+        {
+            if (new Vector2(p.x, p.z).magnitude < campRadius) return true;
+            if (Mathf.Abs(p.x) < 4f && p.z > 0f && p.z < 36f) return true;
+            if (Vector3.Distance(p, new Vector3(-15f, 0f, 14f)) < denRadius) return true;
+            if (Vector3.Distance(p, new Vector3(14f, 0f, 16f)) < denRadius) return true;
+            if (Vector3.Distance(p, new Vector3(0f, 0f, 31f)) < denRadius + 1f) return true;
+            return false;
+        }
+
+        private static GameObject PlacePrefab(Transform parent, GameObject[] prefabs, Vector3 pos, float minScale, float maxScale)
+        {
+            var prefab = prefabs[_rng.Next(prefabs.Length)];
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+            go.transform.position = pos;
+            go.transform.rotation = Quaternion.Euler(0f, Range(0f, 360f), 0f);
+            go.transform.localScale = Vector3.one * Range(minScale, maxScale);
+            return go;
         }
 
         private static void Tree(Transform parent, Vector3 pos, Mesh cone, Material trunkMat, Material leafMat)
