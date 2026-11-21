@@ -1,0 +1,58 @@
+# ---- Unity ----
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# Сгенерированные IDE/Unity файлы
+.vs/
+.vscode/
+.idea/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# Crash reports / sysinfo
+sysinfo.txt
+crashlytics-buildid.txt
+
+# Билды
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# Burst / Addressables кэши
+/[Aa]ssets/[Ss]treamingAssets/aa/
+*_BurstDebugInformation_DoNotShip/
+
+# Платные ассеты из Asset Store, которые не хотим коммитить (раскомментировать по мере надобности)
+# /[Aa]ssets/ThirdParty/Paid/
+
+# ---- Blender ----
+*.blend1
+*.blend2
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
