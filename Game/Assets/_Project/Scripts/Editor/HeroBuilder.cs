@@ -30,6 +30,8 @@ namespace Game.Editor
         public const string VisualPath = "Assets/_Project/Resources/Visuals/AV_Hero.asset";
         public const string ToonShader = "Game/Character Toon";
         public const string CrystalShader = "Game/Bracer Crystal";
+        /// <summary>Поворот модели внутри префаба героя (градусы по Y), чтобы лицо смотрело по ходу движения.</summary>
+        public const float ModelYaw = 180f;
 
         [MenuItem("Game/Герой/Собрать героя", priority = 50)]
         public static void BuildMenu()
@@ -265,7 +267,8 @@ namespace Game.Editor
             var root = new GameObject("Hero");
             var inst = (GameObject)PrefabUtility.InstantiatePrefab(model, root.transform);
             inst.transform.localPosition = Vector3.zero;
-            inst.transform.localRotation = Quaternion.identity;
+            // Hero.fbx после импорта смотрит в -Z, а персонаж в игре ходит по +Z: разворачиваем модель внутри префаба
+            inst.transform.localRotation = Quaternion.Euler(0f, ModelYaw, 0f);
 
             var animator = inst.GetComponent<Animator>() ?? inst.AddComponent<Animator>();
             animator.runtimeAnimatorController = controller;
