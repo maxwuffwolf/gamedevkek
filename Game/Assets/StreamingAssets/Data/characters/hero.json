@@ -14,12 +14,22 @@
       "backpack": { "size": 40, "unlocked": 12 },
       "startingItems": [
         { "id": "sword_rusty", "rarity": "common", "equip": true },
-        { "id": "vest_leather", "rarity": "common", "equip": true },
+        { "id": "vest_leather", "rarity": "common", "equip": false },
         { "id": "boots_leather", "rarity": "common", "equip": false }
       ],
       "xpCurve": { "base": 100, "growth": 1.45 },
       "placeholder": { "model": "humanoid", "color": "#3A6EA5", "accent": "#5A3D2A", "scale": 1.0 },
-      "respawnSeconds": 4
+      "respawnSeconds": 4,
+      "_appearanceComment": "Внешний вид модели Hero (Game → Герой → Собрать героя). Меняй и жми F5 прямо в игре. balance: 0 Тьма .. 1 Свет; dirtStart: грязь после падения 0..1.",
+      "appearance": {
+        "hairColor": "#FFD26A", "browColor": "#C08A3A", "skinTint": "#FFFFFF",
+        "eyeRight": "#FFB52E", "eyeLeft": "#6A2FC0", "eyeGlow": 0.6,
+        "dirtStart": 1.0, "washSeconds": 3.0, "dirtColor": "#5C5752",
+        "balance": 0.5, "crystalGlow": 1.6, "crystalLight": "#FFB838", "crystalDark": "#8C3CFF",
+        "absorbRadius": 14,
+        "weapons": { "sword_rusty": "Wpn_Sword_Rusty" },
+        "defaultWeapon": "Wpn_Sword_Rusty"
+      }
     }
   ]
 }
