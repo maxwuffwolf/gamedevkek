@@ -26,7 +26,7 @@ namespace Game.Editor
         /// Версия настроек атмосферы. Если поднять её, при следующей пересборке сцены профиль пост-обработки
         /// и материалы (эффекты, окружение) перезапишутся значениями из кода. Иначе ручные правки сохраняются.
         /// </summary>
-        public const int SettingsVersion = 8;
+        public const int SettingsVersion = 9;
         private const string VersionKey = "Game.Atmosphere.SettingsVersion";
 
         /// <summary>true, пока идёт пересборка, где ассеты нужно обновить до <see cref="SettingsVersion"/>.</summary>
@@ -44,15 +44,15 @@ namespace Game.Editor
         //     на западе догорает тёплая полоска заката, главные тёплые пятна — костёр, светлячки и свет героя
         //     v4 (визуал «как у Shape of Dreams»): общий свет темнее, чтобы локальные источники (грибы, кристаллы,
         //     светлячки, свет героя) стали яркими пятнами, за которые цепляется глаз. Контраст делает пост-обработка.
-        public static readonly Color SunColor = new Color(0.55f, 0.66f, 1f);      // лунный ключевой свет
-        public const float SunIntensity = 1f;
+        public static readonly Color SunColor = new Color(0.62f, 0.74f, 1f);      // лунный ключевой свет
+        public const float SunIntensity = 1.3f;
         public static readonly Color FillColor = new Color(1f, 0.5f, 0.3f);       // отсвет заката у горизонта
         public const float FillIntensity = 0.32f;
-        public static readonly Color FogColor = new Color(0.07f, 0.08f, 0.16f);
-        public static readonly Color SkyAmbient = new Color(0.2f, 0.23f, 0.42f);
-        public static readonly Color EquatorAmbient = new Color(0.15f, 0.14f, 0.25f);
-        public static readonly Color GroundAmbient = new Color(0.04f, 0.035f, 0.065f);
-        public const float FogDensity = 0.012f;
+        public static readonly Color FogColor = new Color(0.11f, 0.15f, 0.3f);
+        public static readonly Color SkyAmbient = new Color(0.32f, 0.4f, 0.78f);
+        public static readonly Color EquatorAmbient = new Color(0.22f, 0.26f, 0.48f);
+        public static readonly Color GroundAmbient = new Color(0.08f, 0.08f, 0.15f);
+        public const float FogDensity = 0.01f;
 
         /// <summary>
         /// Луна высоко (50°): плоская земля в toon-шейдере остаётся в «светлой» ступени, всё читается.
@@ -176,9 +176,9 @@ namespace Game.Editor
             bloom.highQualityFiltering.Override(true);
 
             var color = Add<ColorAdjustments>(profile);
-            color.postExposure.Override(0.85f);
-            color.contrast.Override(20f);
-            color.saturation.Override(6f);
+            color.postExposure.Override(1.0f);
+            color.contrast.Override(12f);
+            color.saturation.Override(16f);
 
             // тени чуть опускаем и холодим (было: подняты — отсюда «серость»), света слегка тёплые
             var lgg = Add<LiftGammaGain>(profile);
@@ -198,8 +198,8 @@ namespace Game.Editor
             // виньетка: края кадра темнее, внимание в центр, к герою
             var vignette = Add<Vignette>(profile);
             vignette.color.Override(new Color(0.01f, 0.01f, 0.04f));
-            vignette.intensity.Override(0.4f);
-            vignette.smoothness.Override(0.45f);
+            vignette.intensity.Override(0.3f);
+            vignette.smoothness.Override(0.5f);
 
             EditorUtility.SetDirty(profile);
             AssetDatabase.SaveAssets();

@@ -60,6 +60,7 @@ namespace Game.Editor
             BuildCrystals(env);
             BuildGlowFlowers(env);
             BuildGroundDetail(env);
+            BuildForestDetails(env, gameplay);
             // частицы (светлячки, пылинки, дымка) только над ущельем: так они гуще там, где их видно
             AtmosphereBuilder.BuildEffects(env, _rng, new Vector3(0f, 0f, 0f), new Vector2(28f, ZMax - ZMin));
 
@@ -135,7 +136,8 @@ namespace Game.Editor
                 return ShowcaseSceneBuilder.Mat("RavineFloor", new Color(0.31f, 0.28f, 0.27f));
             }
             var m = AssetDatabase.LoadAssetAtPath<Material>(path);
-            if (m == null)
+            bool created = m == null;
+            if (created)
             {
                 m = new Material(shader) { name = "RavineGround" };
                 AssetDatabase.CreateAsset(m, path);
@@ -147,6 +149,21 @@ namespace Game.Editor
             m.SetFloat("_PathWidth", 1.5f);
             m.SetFloat("_PathZMin", CraterZ + 4f);
             m.SetFloat("_PathZMax", ExitZ + 10f);
+            if (created || AtmosphereBuilder.RefreshAssets)
+            {
+                // ночь делает свет, а не краска: земля холодная, средней яркости и насыщенная (как у Shape of Dreams),
+                // тропа — тёплая и светлее, чтобы читалась дорога
+                m.SetColor("_DirtColor", new Color(0.2f, 0.24f, 0.42f));
+                m.SetColor("_DirtColor2", new Color(0.27f, 0.31f, 0.5f));
+                m.SetColor("_MossColor", new Color(0.14f, 0.34f, 0.38f));
+                m.SetColor("_MossColor2", new Color(0.22f, 0.44f, 0.4f));
+                m.SetColor("_PathColor", new Color(0.52f, 0.44f, 0.38f));
+                m.SetColor("_PebbleColor", new Color(0.5f, 0.52f, 0.64f));
+                m.SetColor("_LeafColor", new Color(0.68f, 0.4f, 0.24f));
+                m.SetColor("_CrackColor", new Color(0.1f, 0.1f, 0.2f));
+                m.SetColor("_ShadowColor", new Color(0.45f, 0.5f, 0.8f));
+                m.SetFloat("_AmbientStrength", 0.9f);
+            }
             m.SetFloat("_PebbleDensity", 0.12f); // крупные камешки — это модели в BuildGroundDetail, в шейдере только мелкая крошка
             m.SetFloat("_LeafDensity", 0.15f);
             EditorUtility.SetDirty(m);
@@ -159,11 +176,11 @@ namespace Game.Editor
             root.SetParent(parent);
             var cliffMats = new[]
             {
-                ShowcaseSceneBuilder.Mat("CliffA", new Color(0.37f, 0.35f, 0.4f)),
-                ShowcaseSceneBuilder.Mat("CliffB", new Color(0.42f, 0.37f, 0.35f)),
+                ShowcaseSceneBuilder.Mat("CliffA", new Color(0.4f, 0.42f, 0.56f)),
+                ShowcaseSceneBuilder.Mat("CliffB", new Color(0.45f, 0.43f, 0.52f)),
             };
-            var strataMat = ShowcaseSceneBuilder.Mat("CliffStrata", new Color(0.27f, 0.25f, 0.3f));
-            var mossMat = ShowcaseSceneBuilder.Mat("CliffMoss", new Color(0.23f, 0.32f, 0.24f));
+            var strataMat = ShowcaseSceneBuilder.Mat("CliffStrata", new Color(0.28f, 0.29f, 0.42f));
+            var mossMat = ShowcaseSceneBuilder.Mat("CliffMoss", new Color(0.2f, 0.42f, 0.38f));
             var rockMat = ShowcaseSceneBuilder.Mat("CliffRock", new Color(0.33f, 0.32f, 0.36f));
             var treePrefabs = EnvironmentPrefabs.Load("Tree");
             var cone = ShowcaseSceneBuilder.ConeMesh();
@@ -434,6 +451,15 @@ namespace Game.Editor
                 float z = Range(CraterZ + 9f, ExitZ - 8f), across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.55f, 0.8f);
                 var p = Floor(z, across);
                 if (Reserved(p, across)) continue;
+                var logModel = ForestDetails.Load("Det_Log_Mossy");
+                if (logModel != null)
+                {
+                    var lg = ForestDetails.Place(logModel, root, p, Range(0f, 360f), Range(0.9f, 1.25f), castShadows: true);
+                    var bc = lg.AddComponent<BoxCollider>();
+                    bc.center = new Vector3(0f, 0.25f, 0f);
+                    bc.size = new Vector3(2.4f, 0.5f, 0.5f);
+                    continue;
+                }
                 var log = ShowcaseSceneBuilder.Prop(PrimitiveType.Cylinder, root, "FallenLog", p + Vector3.up * 0.3f,
                     new Vector3(0.55f, Range(1.6f, 2.6f), 0.55f), logMat, keepCollider: true);
                 log.transform.rotation = Quaternion.Euler(0f, Range(0f, 360f), 90f);
@@ -499,6 +525,9 @@ namespace Game.Editor
                 (cap: GlowMat("ShroomCapBlue", new Color(0.35f, 0.5f, 0.9f), new Color(0.35f, 0.75f, 2.2f)), light: new Color(0.45f, 0.65f, 1f)),
             };
             var stemMat = ShowcaseSceneBuilder.Mat("ShroomStem", new Color(0.62f, 0.66f, 0.74f));
+            var models = ForestDetails.LoadAll("Det_Shroom_Glow_A", "Det_Shroom_Glow_B", "Det_Shroom_Tall");
+            var modelLights = new[] { new Color(0.35f, 1f, 0.85f), new Color(0.45f, 0.65f, 1f), new Color(0.75f, 0.45f, 1f) };
+            _glowSpots.Clear();
 
             for (int i = 0; i < 26; i++)
             {
@@ -510,6 +539,18 @@ namespace Game.Editor
                 var cluster = new GameObject("ShroomCluster").transform;
                 cluster.SetParent(root);
                 cluster.position = p;
+                _glowSpots.Add(p);
+                if (models.Length == 3)
+                {
+                    // модели из Blender: главная кучка + 1–2 поменьше рядом, свет — цвета шляпок
+                    int k0 = _rng.Next(3);
+                    ForestDetails.Place(models[k0], cluster, p, Range(0f, 360f), Range(1.3f, 1.9f));
+                    for (int e = _rng.Next(1, 3); e > 0; e--)
+                        ForestDetails.Place(models[_rng.NextDouble() < 0.7 ? k0 : _rng.Next(3)], cluster,
+                            p + new Vector3(Range(-0.9f, 0.9f), 0f, Range(-0.9f, 0.9f)), Range(0f, 360f), Range(0.7f, 1.1f));
+                    AddPointLight(cluster, "ShroomLight", p + Vector3.up * 0.7f, modelLights[k0], Range(3.4f, 4.4f), Range(1.5f, 2.1f), flicker: 0.15f);
+                    continue;
+                }
 
                 int n = _rng.Next(3, 7);
                 for (int k = 0; k < n; k++)
@@ -540,11 +581,28 @@ namespace Game.Editor
             var violet = (mat: GlowMat("CrystalViolet", new Color(0.55f, 0.3f, 0.95f), new Color(0.55f, 0.2f, 1.3f)), light: new Color(0.7f, 0.4f, 1f));
             var gold = (mat: GlowMat("CrystalGold", new Color(1f, 0.75f, 0.35f), new Color(1.25f, 0.7f, 0.18f)), light: new Color(1f, 0.7f, 0.35f));
 
+            var violetModels = ForestDetails.LoadAll("Det_Crystal_Violet", "Det_Crystal_Small");
+            var goldModel = ForestDetails.Load("Det_Crystal_Gold");
+
             void Cluster(Vector3 p, (Material mat, Color light) kind, float scale)
             {
                 var cluster = new GameObject("CrystalCluster").transform;
                 cluster.SetParent(root);
                 cluster.position = p;
+                _glowSpots.Add(p);
+                bool isGold = kind.mat == gold.mat;
+                if (violetModels.Length == 2 && goldModel != null)
+                {
+                    var main = isGold ? goldModel : violetModels[0];
+                    ForestDetails.Place(main, cluster, p, Range(0f, 360f), scale * Range(1.3f, 1.7f), castShadows: true);
+                    for (int e = _rng.Next(1, 4); e > 0; e--)
+                    {
+                        var off = Quaternion.Euler(0f, Range(0f, 360f), 0f) * Vector3.forward * Range(0.7f, 1.3f) * scale;
+                        ForestDetails.Place(isGold && _rng.NextDouble() < 0.5 ? goldModel : violetModels[1], cluster, p + off, Range(0f, 360f), scale * Range(0.8f, 1.3f));
+                    }
+                    AddPointLight(cluster, "CrystalLight", p + Vector3.up * 1f, kind.light, 4.8f * Mathf.Sqrt(scale), 1.8f, flicker: 0.2f);
+                    return;
+                }
                 int n = _rng.Next(3, 7);
                 for (int k = 0; k < n; k++)
                 {
@@ -591,11 +649,17 @@ namespace Game.Editor
                 ShowcaseSceneBuilder.UnlitMat("FlowerGlowYellow", new Color(2.6f, 1.9f, 0.55f)),
                 ShowcaseSceneBuilder.UnlitMat("FlowerGlowWhite", new Color(1.6f, 1.8f, 2.4f)),
             };
+            var bells = ForestDetails.LoadAll("Det_Flower_Bells", "Det_Flower_Bells_Pink");
             for (int i = 0; i < 45; i++)
             {
                 float z = Range(ZMin + 4f, ZMax - 3f), across = Range(-0.92f, 0.92f);
                 var p = Floor(z, across);
                 if (Reserved(p, across)) continue;
+                if (bells.Length > 0)
+                {
+                    ForestDetails.Place(bells[_rng.NextDouble() < 0.7 ? 0 : bells.Length - 1], root, p, Range(0f, 360f), Range(1.1f, 1.6f));
+                    continue;
+                }
                 var mat = mats[_rng.Next(mats.Length)];
                 int n = _rng.Next(3, 8);
                 for (int k = 0; k < n; k++)
@@ -637,8 +701,9 @@ namespace Game.Editor
                 return go;
             }
 
-            // корни: выползают из-под стен на пол, по 2–4 изогнутых сегмента
-            for (float z = ZMin + 3f; z < ZMax - 3f; z += Range(2.2f, 4f))
+            bool models = ForestDetails.Available;
+            // корни: выползают из-под стен на пол, по 2–4 изогнутых сегмента (если нет моделей — см. BuildForestDetails)
+            for (float z = ZMin + 3f; !models && z < ZMax - 3f; z += Range(2.2f, 4f))
             {
                 int side = _rng.NextDouble() < 0.5 ? -1 : 1;
                 var start = Floor(z, side * 1.02f);
@@ -662,7 +727,7 @@ namespace Game.Editor
             }
 
             // ветки с сучками
-            for (int i = 0; i < 40; i++)
+            for (int i = 0; !models && i < 40; i++)
             {
                 float z = Range(ZMin + 3f, ZMax - 3f), across = Range(-0.9f, 0.9f);
                 var p = Floor(z, across);
@@ -700,7 +765,7 @@ namespace Game.Editor
             }
 
             // кучки сухих листьев: плоские «пластинки» тёплых цветов, гуще у стен
-            for (int i = 0; i < 38; i++)
+            for (int i = 0; !models && i < 38; i++)
             {
                 float z = Range(ZMin + 3f, ZMax - 3f);
                 float across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.4f, 0.95f);
@@ -742,6 +807,120 @@ namespace Game.Editor
                 float across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.85f, 1f);
                 var p = Floor(z, across);
                 if (!Reserved(p, across)) PlacePrefab(root, bushPrefabs, p, 0.5f, 0.9f);
+            }
+        }
+
+        // ------------------------------------------------------------------ живая детализация (модели forest_details.py)
+
+        /// <summary>Где стоят светящиеся грибы/кристаллы — вокруг них кружат мотыльки.</summary>
+        private static readonly System.Collections.Generic.List<Vector3> _glowSpots = new();
+
+        /// <summary>
+        /// Папоротники, разные кусты, трава, ягоды, мухоморы, корни, ветки, листья, пни — и живность.
+        /// Правило читаемости: крупное и тёмное — у стен, на тропе и рядом только низкое и светлое.
+        /// </summary>
+        private static void BuildForestDetails(Transform parent, Transform gameplay)
+        {
+            if (!ForestDetails.Available) return;
+            var root = new GameObject("ForestDetails").transform;
+            root.SetParent(parent);
+            var ferns = ForestDetails.LoadAll("Det_Fern_A", "Det_Fern_B");
+            var bushes = ForestDetails.LoadAll("Det_Bush_Round", "Det_Bush_Blue", "Det_Bush_Flower");
+            var grass = ForestDetails.LoadAll("Det_Grass_Tall", "Det_Grass_Blue");
+            var berries = ForestDetails.LoadAll("Det_Berry_Blue", "Det_Berry_Red");
+            var toad = ForestDetails.Load("Det_Shroom_Toadstool");
+            var rootsBig = ForestDetails.Load("Det_Roots_Big");
+            var rootsSmall = ForestDetails.Load("Det_Roots_Small");
+            var sticks = ForestDetails.LoadAll("Det_Stick_A", "Det_Stick_B");
+            var pile = ForestDetails.Load("Det_Stick_Pile");
+            var leaves = ForestDetails.Load("Det_Leaves");
+            var pebbles = ForestDetails.Load("Det_Pebbles");
+            var stump = ForestDetails.Load("Det_Stump");
+
+            float Side() => _rng.NextDouble() < 0.5 ? -1f : 1f;
+            GameObject Pick(GameObject[] arr) => arr[_rng.Next(arr.Length)];
+            void Scatter(int count, float acrossMin, float acrossMax, System.Action<Vector3> place, float zPad = 2f)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    float z = Range(ZMin + zPad, ZMax - zPad), across = Side() * Range(acrossMin, acrossMax);
+                    var p = Floor(z, across);
+                    if (!Reserved(p, across)) place(p);
+                }
+            }
+
+            // корни у подножия стен — «тут росли огромные деревья»
+            for (float z = ZMin + 3f; z < ZMax - 3f; z += Range(4f, 7f))
+            {
+                float side = Side();
+                var p = Floor(z, side * Range(0.9f, 1.0f));
+                if (Reserved(Floor(z, side * 0.85f), side * 0.85f)) continue;
+                float yawToCenter = side > 0 ? 270f : 90f;
+                ForestDetails.Place(_rng.NextDouble() < 0.5 && rootsBig != null ? rootsBig : rootsSmall, root, p,
+                    yawToCenter + Range(-50f, 50f), Range(1.1f, 1.8f), castShadows: true);
+            }
+            // пни у стен
+            for (int i = 0; stump != null && i < 5; i++)
+            {
+                float z = Range(CraterZ + 10f, ExitZ - 6f), across = Side() * Range(0.7f, 0.88f);
+                var p = Floor(z, across);
+                if (Reserved(p, across)) continue;
+                var go = ForestDetails.Place(stump, root, p, Range(0f, 360f), Range(1.0f, 1.4f), castShadows: true);
+                var cc = go.AddComponent<CapsuleCollider>();
+                cc.center = new Vector3(0f, 0.4f, 0f);
+                cc.radius = 0.45f;
+                cc.height = 0.8f;
+            }
+            // кусты и папоротники — у стен (крупное и тёмное не загораживает тропу)
+            Scatter(45, 0.65f, 0.97f, p => ForestDetails.Place(Pick(bushes), root, p, Range(0f, 360f), Range(1.2f, 2.0f)));
+            Scatter(60, 0.5f, 0.97f, p => ForestDetails.Place(Pick(ferns), root, p, Range(0f, 360f), Range(1.3f, 2.1f)));
+            Scatter(30, 0.4f, 0.9f, p => ForestDetails.Place(Pick(berries), root, p, Range(0f, 360f), Range(1.1f, 1.6f)));
+            if (toad != null)
+                Scatter(14, 0.4f, 0.9f, p => ForestDetails.Place(toad, root, p, Range(0f, 360f), Range(1.0f, 1.5f)));
+            // трава — везде, кроме тропы; у тропы пониже
+            Scatter(260, 0.3f, 0.98f, p => ForestDetails.Place(Pick(grass), root, p, Range(0f, 360f), Range(0.9f, 1.5f)));
+            // ветки, кучки хвороста, листья, камешки — по всему дну
+            Scatter(36, 0.3f, 0.95f, p => ForestDetails.Place(Pick(sticks), root, p, Range(0f, 360f), Range(0.9f, 1.5f)));
+            if (pile != null) Scatter(10, 0.4f, 0.9f, p => ForestDetails.Place(pile, root, p, Range(0f, 360f), Range(1f, 1.4f)));
+            if (leaves != null) Scatter(60, 0.0f, 0.95f, p => ForestDetails.Place(leaves, root, p, Range(0f, 360f), Range(1.0f, 1.8f)));
+            if (pebbles != null) Scatter(40, 0.3f, 0.98f, p => ForestDetails.Place(pebbles, root, p, Range(0f, 360f), Range(1.0f, 1.6f)));
+
+            BuildCritters(gameplay);
+        }
+
+        /// <summary>Птички у тропы (вспархивают при приближении), мотыльки у светящихся грибов, жуки на земле.</summary>
+        private static void BuildCritters(Transform gameplay)
+        {
+            var bird = ForestDetails.Load("Det_Bird");
+            var moth = ForestDetails.Load("Det_Moth");
+            var beetle = ForestDetails.Load("Det_Beetle");
+            var root = new GameObject("Critters").transform;
+            root.SetParent(gameplay);
+
+            void Spawn(GameObject model, Vector3 p, Critter.Kind kind, float scale, float radius)
+            {
+                if (model == null) return;
+                var go = ForestDetails.Place(model, root, p, Range(0f, 360f), scale);
+                go.name = kind.ToString();
+                var c = go.AddComponent<Critter>();
+                c.Type = kind;
+                c.Radius = radius;
+            }
+
+            for (int i = 0; i < 8; i++)
+            {
+                float z = Range(CraterZ + 10f, ExitZ - 6f), across = Range(-0.6f, 0.6f);
+                var p = Floor(z, across);
+                if (Vector3.Distance(p, SkeletonPos) < 3f) continue;
+                Spawn(bird, p, Critter.Kind.Bird, 1.6f, 1.2f);
+            }
+            foreach (var spot in _glowSpots)
+                if (_rng.NextDouble() < 0.6)
+                    Spawn(moth, spot, Critter.Kind.Moth, 1.8f, Range(1.2f, 2f));
+            for (int i = 0; i < 16; i++)
+            {
+                float z = Range(ZMin + 4f, ZMax - 4f), across = Range(-0.85f, 0.85f);
+                Spawn(beetle, Floor(z, across), Critter.Kind.Beetle, 2.2f, 1.2f);
             }
         }
 
