@@ -10,7 +10,8 @@ using UnityEngine.SceneManagement;
 namespace Game.Editor
 {
     /// <summary>
-    /// Генерирует сцену-шоукейс из примитивов: лагерь с костром, квестовик, волчьи логова, лес, камни вожака.
+    /// Генерирует сцену-шоукейс из примитивов: лагерь с костром, квестовик, волчьи логова, лес, камни вожака,
+    /// на юге — спуск обратно в овраг (зона "forest" в zones.json, сцена Showcase).
     /// Меню: Game → Пересобрать сцену Showcase. Сцену потом можно спокойно править руками.
     /// </summary>
     public static class ShowcaseSceneBuilder
@@ -66,26 +67,25 @@ namespace Game.Editor
             AddSpawner(gameplay, "Spawner_Wolves_East", "wolf", new Vector3(14f, 0f, 16f), 3, 5f, new Vector2Int(1, 2), 15f);
             AddSpawner(gameplay, "Spawner_Wolf_Alpha", "wolf_alpha", new Vector3(0f, 0f, 31f), 1, 1.5f, new Vector2Int(3, 3), 60f);
 
+            // --- переход обратно в овраг (юг). Из оврага сюда ведёт портал с TargetEntrance = "from_ravine"
+            ZoneGateBuilder.Build(gameplay, RavineGate, 0f, targetZone: "ravine", targetEntrance: "from_forest",
+                localEntranceId: "from_ravine", style: ZoneGateBuilder.Style.Descent);
+
             AtmosphereBuilder.EndBuild();
             EditorSceneManager.SaveScene(scene, ScenePath);
-            AddToBuildSettings(ScenePath);
+            ZoneScenes.SyncBuildSettings(ScenePath);
             AssetDatabase.SaveAssets();
             Debug.Log($"[Game] Сцена собрана: {ScenePath}. Жми Play!");
         }
 
-        private static void AddToBuildSettings(string path)
-        {
-            var scenes = new System.Collections.Generic.List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
-            scenes.RemoveAll(s => s.path == path);
-            scenes.Insert(0, new EditorBuildSettingsScene(path, true));
-            EditorBuildSettings.scenes = scenes.ToArray();
-        }
+        /// <summary>Где стоит арка спуска в овраг (южный край леса).</summary>
+        private static readonly Vector3 RavineGate = new(0f, 0f, -37f);
 
         // ------------------------------------------------------------------ окружение
 
         private static void BuildLighting(Transform parent) => AtmosphereBuilder.BuildLighting(parent);
 
-        private static void BuildCamera()
+        internal static void BuildCamera()
         {
             var cam = new GameObject("Main Camera") { tag = "MainCamera" };
             cam.transform.position = new Vector3(0f, 14f, -13f);
@@ -227,7 +227,7 @@ namespace Game.Editor
             for (int i = 0; i < 40; i++)
             {
                 var p = new Vector3(Range(-40f, 40f), 0f, Range(-40f, 40f));
-                if (p.magnitude < 11f || (Mathf.Abs(p.x) < 4f && p.z > 0f)) continue;
+                if (p.magnitude < 11f || (Mathf.Abs(p.x) < 4f && p.z > 0f) || IsReserved(p, 0f, 0f)) continue;
                 if (rockPrefabs.Length > 0)
                 {
                     PlacePrefab(forest, rockPrefabs, p, 0.7f, 1.3f);
@@ -261,6 +261,7 @@ namespace Game.Editor
             if (Vector3.Distance(p, new Vector3(-15f, 0f, 14f)) < denRadius) return true;
             if (Vector3.Distance(p, new Vector3(14f, 0f, 16f)) < denRadius) return true;
             if (Vector3.Distance(p, new Vector3(0f, 0f, 31f)) < denRadius + 1f) return true;
+            if (Mathf.Abs(p.x - RavineGate.x) < 6f && p.z < RavineGate.z + 9f) return true; // проход к оврагу
             return false;
         }
 
@@ -347,7 +348,7 @@ namespace Game.Editor
 
         private static float Range(float a, float b) => a + (float)_rng.NextDouble() * (b - a);
 
-        private static GameObject Prop(PrimitiveType type, Transform parent, string name, Vector3 pos, Vector3 scale, Material mat, bool keepCollider)
+        internal static GameObject Prop(PrimitiveType type, Transform parent, string name, Vector3 pos, Vector3 scale, Material mat, bool keepCollider)
         {
             var go = GameObject.CreatePrimitive(type);
             go.name = name;
@@ -360,7 +361,7 @@ namespace Game.Editor
         }
 
         /// <summary>Материал плейсхолдера: toon-шейдер (как у моделей), если он есть, иначе URP Lit.</summary>
-        private static Material Mat(string name, Color color)
+        internal static Material Mat(string name, Color color)
         {
             string path = $"{GeneratedDir}/Materials/{name}.mat";
             var toon = Shader.Find(EnvironmentPrefabs.ToonShaderName);
@@ -387,7 +388,7 @@ namespace Game.Editor
             return m;
         }
 
-        private static Material UnlitMat(string name, Color color)
+        internal static Material UnlitMat(string name, Color color)
         {
             string path = $"{GeneratedDir}/Materials/{name}.mat";
             var m = AssetDatabase.LoadAssetAtPath<Material>(path);
@@ -402,7 +403,7 @@ namespace Game.Editor
         }
 
         /// <summary>Восьмигранный конус с плоским шейдингом (лоуполи-ёлка).</summary>
-        private static Mesh ConeMesh()
+        internal static Mesh ConeMesh()
         {
             string path = $"{GeneratedDir}/Cone8.asset";
             var existing = AssetDatabase.LoadAssetAtPath<Mesh>(path);

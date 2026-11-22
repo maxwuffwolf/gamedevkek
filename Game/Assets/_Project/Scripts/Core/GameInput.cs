@@ -42,7 +42,10 @@ namespace Game.Core
             }
         }
 
-        public static bool GameplayBlocked => TextInputActive;
+        /// <summary>Пока true (экран загрузки между зонами), геймплей тоже игнорирует ввод.</summary>
+        public static bool LoadingActive;
+
+        public static bool GameplayBlocked => TextInputActive || LoadingActive;
 
         /// <summary>WASD → вектор (x = вправо, y = вперёд), нормализован.</summary>
         public static Vector2 Move
