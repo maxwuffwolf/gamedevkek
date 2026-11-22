@@ -235,11 +235,15 @@ namespace Game.Editor
             AtmosphereBuilder.BuildEmbers(root, c + Vector3.up * 0.2f);
         }
 
-        /// <summary>Где воткнут меч относительно скелета (локально, метры). Совпадает с SWORD_POS в Tools/Blender/ravine_props.py.</summary>
-        private static readonly Vector3 SwordLocal = new(-0.8f, 0f, 0.5f);
+        /// <summary>Солдат чуть крупнее «реального» — с камеры сверху так лучше читается.</summary>
+        private const float ModelScale = 1.15f;
+
+        /// <summary>Где воткнут меч относительно скелета (локально, метры). SWORD_POS из Tools/Blender/ravine_props.py:
+        /// Blender (x, y) → Unity (-x, -y), умножено на масштаб модели.</summary>
+        private static readonly Vector3 SwordLocal = new(-0.62f * ModelScale, 0f, 0.12f * ModelScale);
 
         /// <summary>
-        /// Павший солдат у стены (модель Prop_Skeleton_Soldier.fbx из Tools/Blender/ravine_props.py, без неё — заглушка
+        /// Павший солдат спиной к валуну (модель Prop_Skeleton_Soldier.fbx из Tools/Blender/ravine_props.py, без неё — заглушка
         /// из примитивов) и воткнутый рядом ржавый меч — контейнер "ravine_rusty_sword" (клик → окно → взять меч).
         /// </summary>
         private static void BuildSkeleton(Transform parent, Transform gameplay)
@@ -257,6 +261,7 @@ namespace Game.Editor
                 var inst = (GameObject)PrefabUtility.InstantiatePrefab(model, root);
                 inst.transform.localPosition = Vector3.zero;
                 inst.transform.localRotation = Quaternion.identity;
+                inst.transform.localScale = Vector3.one * ModelScale;
                 foreach (var r in inst.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
             }
             else
@@ -265,18 +270,18 @@ namespace Game.Editor
             }
             // твёрдый коллайдер, чтобы герой не проходил сквозь скелет и щит
             var body = root.gameObject.AddComponent<BoxCollider>();
-            body.center = new Vector3(0f, 0.45f, -0.45f); // скелет + валун за спиной (он в той же модели)
-            body.size = new Vector3(2.1f, 0.9f, 1.6f);
+            body.center = new Vector3(0f, 0.4f, -0.25f) * ModelScale; // скелет + валун за спиной (он в той же модели)
+            body.size = new Vector3(2.0f, 0.8f, 1.0f) * ModelScale;
 
             // мягкий холодный свет сверху: в сумерках солдат должен читаться силуэтом
             var lightGo = new GameObject("SoldierLight");
             lightGo.transform.SetParent(root, false);
-            lightGo.transform.localPosition = new Vector3(-0.2f, 2.4f, 1.3f);
+            lightGo.transform.localPosition = new Vector3(0f, 2.2f, 1.6f);
             var l = lightGo.AddComponent<Light>();
             l.type = LightType.Point;
             l.color = new Color(0.78f, 0.84f, 1f);
-            l.range = 5f;
-            l.intensity = 2f;
+            l.range = 5.5f;
+            l.intensity = 3f;
             l.shadows = LightShadows.None;
 
             BuildRustySword(gameplay, root);
@@ -299,11 +304,11 @@ namespace Game.Editor
             container.ContainerId = "ravine_rusty_sword";
             container.Range = 2f;
 
-            // модель: остриём в землю на 20 см, чуть завалена набок
+            // модель: остриём в землю на 20 см, стоит рядом с солдатом
             const float tip = 0.903f; // от центра рукояти до острия (lowpoly_kit.SWORD_TIP)
             var visual = new GameObject("Model").transform;
             visual.SetParent(go.transform, false);
-            visual.localRotation = Quaternion.Euler(-12f, 0f, 9f);
+            visual.localRotation = Quaternion.Euler(-3f, 0f, 4f); // почти вертикально, как воткнули
             visual.localPosition = visual.localRotation * new Vector3(0f, tip - 0.2f, 0f);
 
             var swordModel = AssetDatabase.LoadAssetAtPath<GameObject>(HeroBuilder.SwordFbx);
@@ -331,16 +336,7 @@ namespace Game.Editor
                 Part(PrimitiveType.Cylinder, "Sword_Grip", new Vector3(0f, 0.04f, 0f), new Vector3(0.03f, 0.09f, 0.03f), grip);
             }
 
-            // холодный блик на клинке, чтобы место читалось издалека (гаснет вместе с мечом)
-            var lightGo = new GameObject("SwordGlint");
-            lightGo.transform.SetParent(go.transform, false);
-            lightGo.transform.localPosition = new Vector3(0f, 1.2f, -0.2f);
-            var l = lightGo.AddComponent<Light>();
-            l.type = LightType.Point;
-            l.color = new Color(0.7f, 0.8f, 1f);
-            l.range = 3.5f;
-            l.intensity = 2.6f;
-            l.shadows = LightShadows.None;
+            // подсветка «тут лут» — столб света вешает сам WorldContainer ("lootBeam": true в containers.json)
         }
 
         /// <summary>Скелет из примитивов — если модели Prop_Skeleton_Soldier.fbx ещё нет в проекте.</summary>

@@ -44,8 +44,8 @@ MAT_2S = "M_Prop_Ravine_2S"
 
 # Где воткнут меч относительно скелета (Blender, метры). RavineSceneBuilder ставит меч туда же:
 # в Unity это локальные (-SWORD_POS.x, 0, -SWORD_POS.y).
-SWORD_POS = Vector((0.8, -0.5, 0.0))
-SWORD_TILT = (14.0, -9.0)  # наклон к стене/вбок, градусы
+SWORD_POS = Vector((0.62, -0.12, 0.0))
+SWORD_TILT = (3.0, -4.0)  # наклон к стене/вбок, градусы
 
 
 def args():
@@ -67,23 +67,23 @@ def bone_col(seed):
 # ---------------------------------------------------------------- поза (ключевые точки)
 
 PELVIS = Vector((0.0, 0.12, 0.13))
-NECK = Vector((0.025, 0.25, 0.62))
+NECK = Vector((0.02, 0.16, 0.66))
 UP = (NECK - PELVIS).normalized()
 
-SHOULDER_L = Vector((-0.2, 0.23, 0.57))
-ELBOW_L = Vector((-0.27, 0.0, 0.36))
+SHOULDER_L = Vector((-0.2, 0.15, 0.6))
+ELBOW_L = Vector((-0.27, -0.06, 0.37))
 WRIST_L = Vector((-0.13, -0.27, 0.43))
 
-SHOULDER_R = Vector((0.2, 0.25, 0.55))
-ELBOW_R = Vector((0.31, 0.17, 0.3))
+SHOULDER_R = Vector((0.2, 0.17, 0.58))
+ELBOW_R = Vector((0.31, 0.1, 0.32))
 WRIST_R = Vector((0.39, 0.0, 0.05))
 
 HIP_L, KNEE_L, ANKLE_L = Vector((-0.1, 0.08, 0.12)), Vector((-0.16, -0.22, 0.4)), Vector((-0.18, -0.44, 0.08))
 HIP_R, KNEE_R, ANKLE_R = Vector((0.1, 0.08, 0.12)), Vector((0.15, -0.33, 0.12)), Vector((0.18, -0.73, 0.08))
 
 # череп: свесился вперёд и к правому плечу
-SKULL = Vector((0.07, 0.16, 0.75))
-SKULL_ROT = (Matrix.Rotation(math.radians(-16), 3, "Y") @ Matrix.Rotation(math.radians(-32), 3, "X"))
+SKULL = Vector((0.06, 0.08, 0.8))
+SKULL_ROT = (Matrix.Rotation(math.radians(-14), 3, "Y") @ Matrix.Rotation(math.radians(-24), 3, "X"))
 
 
 def torso_frame(h):
@@ -444,7 +444,7 @@ def build_arrows(rng):
 
 def build_shield(rng):
     """Круглый щит, прислонён к стене слева, кусок откушен."""
-    center = Vector((-0.56, 0.3, 0.29))
+    center = Vector((-0.6, 0.12, 0.27))
     rot = look_rot(Vector((0.3, -1.0, 0.6)), up=(0, 0, 1))  # лицо щита наружу и вверх
     loc = lambda v: center + rot @ Vector(v)  # noqa: E731
     R = 0.26
@@ -492,8 +492,8 @@ def build_shield(rng):
     return part("shield", geo, col, MAT)
 
 
-STONE = (0.44, 0.44, 0.5)
-STONE_DARK = (0.26, 0.26, 0.31)
+STONE = (0.3, 0.3, 0.35)  # темнее костей — фигура читается на фоне камня
+STONE_DARK = (0.17, 0.17, 0.21)
 
 
 def build_boulder(rng):
@@ -507,9 +507,9 @@ def build_boulder(rng):
         ico(bm, center, 1.0, scale=scale, subdiv=2, deform=deform)
 
     def geo(bm):
-        rock(bm, (-0.05, 0.9, 0.18), (1.0, 0.58, 0.72), 1.0)
-        rock(bm, (0.78, 0.62, 0.05), (0.36, 0.3, 0.28), 4.0)
-        rock(bm, (-0.95, 0.55, 0.02), (0.25, 0.22, 0.18), 7.0)
+        # низкий и неглубокий: голова и плечи солдата выше камня, сверху камень не перекрывает фигуру
+        rock(bm, (-0.05, 0.6, 0.02), (1.0, 0.42, 0.52), 1.0)
+        rock(bm, (-1.0, 0.42, 0.0), (0.26, 0.22, 0.2), 7.0)
 
     def col(c, nrm, p):
         col = lerp3(STONE, STONE_DARK, 0.2 + 0.55 * n01(c, 4.0, (2, 0, 0)))

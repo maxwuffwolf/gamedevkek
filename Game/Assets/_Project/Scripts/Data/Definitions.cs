@@ -436,6 +436,10 @@ namespace Game.Data
         public bool Persistent = true;
         /// <summary>Можно ли класть свои вещи (сундук-хранилище). Для трупов обычно false.</summary>
         public bool AllowPut;
+        /// <summary>Столб света, как у выпавшего лута, пока внутри что-то есть — «кликни сюда».</summary>
+        public bool LootBeam;
+        /// <summary>Цвет столба (hex). Пусто — цвет самой редкой вещи внутри.</summary>
+        public string BeamColor;
 
         string IContentDef.Id => Id;
     }
