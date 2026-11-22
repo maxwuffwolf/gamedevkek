@@ -76,9 +76,9 @@ namespace Game.Editor
             AddSpawner(gameplay, "Spawner_Scavengers_Mid", Floor(6f, -0.2f), 3, 4f, new Vector2Int(1, 2), 45f);
             AddSpawner(gameplay, "Spawner_Scavengers_Exit", Floor(27f, 0.15f), 3, 4f, new Vector2Int(2, 2), 60f);
 
-            // --- выход в лес: портал ведёт на вход "from_ravine" в лесу, рядом с ним наш вход "from_forest"
+            // --- выход в лес (проход в зарослях, как в PoE): ведёт на вход "from_ravine" в лесу, рядом с ним наш вход "from_forest"
             ZoneGateBuilder.Build(gameplay, Floor(ExitZ), 180f, targetZone: "forest", targetEntrance: "from_ravine",
-                localEntranceId: "from_forest", style: ZoneGateBuilder.Style.Ascent);
+                localEntranceId: "from_forest", style: ZoneGateBuilder.Style.Thicket, wallHalfWidth: HalfWidth(ExitZ) + 1.5f);
 
             AtmosphereBuilder.EndBuild();
             EditorSceneManager.SaveScene(scene, ScenePath);
