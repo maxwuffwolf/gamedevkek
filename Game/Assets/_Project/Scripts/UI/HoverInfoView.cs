@@ -1,3 +1,4 @@
+using Game.Gameplay.Actors;
 using Game.Gameplay.World;
 using UnityEngine;
 using UnityEngine.UI;
@@ -31,7 +32,7 @@ namespace Game.UI
             var pc = GameWorld.PlayerController;
             var target = pc != null ? pc.Hovered : null;
             var cam = Camera.main;
-            if (target == null || cam == null)
+            if (!target.IsAlive() || cam == null)
             {
                 _bg.enabled = false;
                 _text.enabled = false;
