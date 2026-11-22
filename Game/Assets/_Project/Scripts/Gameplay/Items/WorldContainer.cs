@@ -43,6 +43,7 @@ namespace Game.Gameplay.Items
 
         private ContentDatabase _db;
         private ContainerService _service;
+        private LootBeam _beam;
 
         public string Key => string.IsNullOrEmpty(InstanceId) ? $"{gameObject.scene.name}:{ContainerId}" : InstanceId;
         public ContainerDef Def => _db != null ? _db.Container(ContainerId) : null;
@@ -97,6 +98,36 @@ namespace Game.Gameplay.Items
             // режим Hide: прячем все рендеры и свет на самом объекте (меч в земле исчезает целиком)
             foreach (var r in GetComponentsInChildren<Renderer>(true)) r.enabled = !hide;
             foreach (var l in GetComponentsInChildren<Light>(true)) l.enabled = !hide && !(Empty && def != null && def.WhenEmpty != ContainerEmptyMode.Keep);
+            RefreshBeam(def);
+        }
+
+        /// <summary>Столб света как у лута: есть, пока в контейнере что-то лежит (или его ещё не открывали).</summary>
+        private void RefreshBeam(ContainerDef def)
+        {
+            bool want = def != null && def.LootBeam && !Empty;
+            if (!want)
+            {
+                if (_beam != null) _beam.gameObject.SetActive(false);
+                return;
+            }
+            var color = BeamColor(def);
+            if (_beam == null) _beam = LootBeam.Create(transform, color);
+            else _beam.SetColor(color);
+            _beam.gameObject.SetActive(true);
+        }
+
+        private Color BeamColor(ContainerDef def)
+        {
+            if (!string.IsNullOrEmpty(def.BeamColor)) return ColorUtil.Parse(def.BeamColor, Color.white);
+            string best = null;
+            void Consider(string rarity)
+            {
+                if (rarity != null && (best == null || _db.RarityOrder(rarity) > _db.RarityOrder(best))) best = rarity;
+            }
+            var state = _service?.Find(Key);
+            if (state != null) foreach (var it in state.Slots) Consider(it?.Rarity);
+            else foreach (var it in def.Items) Consider(it.Rarity);
+            return best != null ? _db.RarityColor(best) : new Color(1f, 0.82f, 0.3f);
         }
 
         // ---------------------------------------------------------------- IInteractable
