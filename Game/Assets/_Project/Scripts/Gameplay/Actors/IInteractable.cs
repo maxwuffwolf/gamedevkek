@@ -14,4 +14,14 @@ namespace Game.Gameplay.Actors
         bool CanInteract { get; }
         void Interact(Actor player);
     }
+
+    public static class InteractableExtensions
+    {
+        /// <summary>
+        /// Жив ли объект. Обычное `x != null` для интерфейса не знает, что Unity-объект уже уничтожен
+        /// (подобранный лут, исчезнувший NPC) — а обращение к его transform даёт MissingReferenceException.
+        /// </summary>
+        public static bool IsAlive(this IInteractable target) =>
+            target is Object unityObject ? unityObject != null : target != null;
+    }
 }

@@ -30,8 +30,14 @@ namespace Game.Gameplay.Actors
         private IInteractable _pendingInteract;
         private float _lastWarnTime;
 
-        /// <summary>Объект под курсором (NPC, лут) — для подсказок в UI.</summary>
-        public IInteractable Hovered { get; private set; }
+        private IInteractable _hovered;
+
+        /// <summary>Объект под курсором (NPC, лут) — для подсказок в UI. Уже уничтоженный объект не возвращается.</summary>
+        public IInteractable Hovered
+        {
+            get => _hovered.IsAlive() ? _hovered : null;
+            private set => _hovered = value;
+        }
         /// <summary>Враг под курсором.</summary>
         public Actor HoveredEnemy { get; private set; }
         public Vector3 AimPoint { get; private set; }
@@ -51,6 +57,8 @@ namespace Game.Gameplay.Actors
             {
                 _mover.Stop();
                 _pendingInteract = null;
+                Hovered = null;
+                HoveredEnemy = null;
                 return;
             }
 
@@ -69,7 +77,7 @@ namespace Game.Gameplay.Actors
 
             if (_pendingInteract != null)
             {
-                if (!_pendingInteract.CanInteract)
+                if (!_pendingInteract.IsAlive() || !_pendingInteract.CanInteract)
                 {
                     _pendingInteract = null;
                 }
