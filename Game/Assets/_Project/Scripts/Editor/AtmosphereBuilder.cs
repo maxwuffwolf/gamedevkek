@@ -26,7 +26,7 @@ namespace Game.Editor
         /// Версия настроек атмосферы. Если поднять её, при следующей пересборке сцены профиль пост-обработки
         /// и материалы (эффекты, окружение) перезапишутся значениями из кода. Иначе ручные правки сохраняются.
         /// </summary>
-        public const int SettingsVersion = 7;
+        public const int SettingsVersion = 8;
         private const string VersionKey = "Game.Atmosphere.SettingsVersion";
 
         /// <summary>true, пока идёт пересборка, где ассеты нужно обновить до <see cref="SettingsVersion"/>.</summary>
