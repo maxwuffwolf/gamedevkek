@@ -4,7 +4,8 @@
 //   * слой грязи/пепла/царапин (_DirtAmount 0..1): процедурный по UV, плюс необязательная маска-текстура;
 //     после падения 1, умылся или надел броню — плавно уводим в 0 (HeroAppearance);
 //   * режим глаз (_EYES): альфа текстуры = маска радужки, цвет вершин R = какой глаз (1 правый, 0 левый),
-//     у каждого глаза свой цвет и лёгкое свечение — гетерохромия.
+//     у каждого глаза свой цвет и лёгкое свечение — гетерохромия;
+//   * контур (_OutlineWidth > 0, в пикселях при 1080p): тёмная обводка «вывернутой оболочкой» — герой не сливается с землёй.
 // Цвет = текстура × Tint × (цвет вершин, если включено).
 Shader "Game/Character Toon"
 {
@@ -22,12 +23,17 @@ Shader "Game/Character Toon"
         _ShadowColor ("Shadow tint", Color) = (0.45, 0.42, 0.62, 1)
         [IntRange] _Steps ("Light steps", Range(1, 5)) = 2
         _StepSmooth ("Step softness", Range(0.001, 0.5)) = 0.12
+        _PointSmooth ("Point lights: 0 toon steps, 1 soft pools", Range(0, 1)) = 1
         _AmbientStrength ("Ambient strength", Range(0, 1)) = 0.4
 
         [Header(Rim)]
         _RimColor ("Rim color", Color) = (1, 0.92, 0.8, 1)
         _RimPower ("Rim power", Range(0.5, 8)) = 3
         _RimStrength ("Rim strength", Range(0, 1)) = 0.25
+
+        [Header(Outline)]
+        _OutlineWidth ("Outline width (px at 1080p, 0 = off)", Range(0, 6)) = 0
+        _OutlineColor ("Outline color", Color) = (0.03, 0.02, 0.05, 1)
 
         [Header(Dirt ash scratches)]
         _DirtAmount ("Dirt amount", Range(0, 1)) = 0
@@ -67,10 +73,13 @@ Shader "Game/Character Toon"
             half4 _ShadowColor;
             half _Steps;
             half _StepSmooth;
+            half _PointSmooth;
             half _AmbientStrength;
             half4 _RimColor;
             half _RimPower;
             half _RimStrength;
+            half _OutlineWidth;
+            half4 _OutlineColor;
             half _DirtAmount;
             half4 _DirtColor;
             float _DirtScale;
@@ -242,18 +251,65 @@ Shader "Game/Character Toon"
                     uint lightCount = GetAdditionalLightsCount();
                     LIGHT_LOOP_BEGIN(lightCount)
                         Light l = GetAdditionalLight(lightIndex, input.positionWS);
+                        // мягкий «бассейн» света вместо ступенек: ступенчатый точечный свет рисует на земле жёсткие круги
                         half a = saturate(dot(n, l.direction)) * l.distanceAttenuation;
-                        light += l.color * Band(saturate(a), _Steps, _StepSmooth);
+                        half aSoft = saturate((dot(n, l.direction) + 0.25) / 1.25) * min(l.distanceAttenuation, 2.0);
+                        light += l.color * lerp(Band(saturate(a), _Steps, _StepSmooth), aSoft, _PointSmooth);
                     LIGHT_LOOP_END
                 #endif
 
                 half3 ambient = SampleSH(n) * _AmbientStrength * ao.indirectAmbientOcclusion;
                 half3 color = albedo * (light + ambient);
                 half rim = pow(1.0 - saturate(dot(n, v)), _RimPower);
-                color += _RimColor.rgb * rim * _RimStrength * (0.35 + 0.65 * band);
+                // rim почти не зависит от луны: в темноте силуэт персонажа должен оставаться обведённым светом
+                color += _RimColor.rgb * rim * _RimStrength * (0.65 + 0.35 * band);
                 color += emission;
                 color = MixFog(color, input.fogFactor);
                 return half4(color, 1);
+            }
+            ENDHLSL
+        }
+
+        // контур: оболочка, раздутая по нормалям в экранном пространстве (толщина в пикселях не зависит от зума камеры),
+        // рисуется задними гранями. SRPDefaultUnlit — URP рисует этот проход вместе с основным.
+        Pass
+        {
+            Name "Outline"
+            Tags { "LightMode" = "SRPDefaultUnlit" }
+            Cull Front
+            ZWrite On
+            ZTest LEqual
+
+            HLSLPROGRAM
+            #pragma target 3.0
+            #pragma vertex OutlineVert
+            #pragma fragment OutlineFrag
+            #pragma multi_compile_fog
+            #pragma multi_compile_instancing
+
+            struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; UNITY_VERTEX_INPUT_INSTANCE_ID };
+            struct Varyings { float4 positionCS : SV_POSITION; half fogFactor : TEXCOORD0; };
+
+            Varyings OutlineVert(Attributes input)
+            {
+                Varyings o = (Varyings)0;
+                UNITY_SETUP_INSTANCE_ID(input);
+                float4 posCS = TransformObjectToHClip(input.positionOS.xyz);
+                float3 nWS = TransformObjectToWorldNormal(input.normalOS);
+                float2 dir = mul((float3x3)UNITY_MATRIX_VP, nWS).xy;
+                float len = length(dir);
+                dir = len > 1e-5 ? dir / len : float2(0, 0);
+                // ширина в пикселях при 1080p → в единицах NDC (экран = 2 единицы); * w — чтобы не уменьшалась с расстоянием
+                float2 ndcPerPixel = 2.0 / _ScreenParams.xy;
+                posCS.xy += dir * _OutlineWidth * (_ScreenParams.y / 1080.0) * ndcPerPixel * posCS.w;
+                o.positionCS = _OutlineWidth > 0.001 ? posCS : float4(0, 0, -2, 1); // выключен — выносим за ближнюю плоскость
+                o.fogFactor = ComputeFogFactor(posCS.z);
+                return o;
+            }
+
+            half4 OutlineFrag(Varyings input) : SV_Target
+            {
+                return half4(MixFog(_OutlineColor.rgb, input.fogFactor), 1);
             }
             ENDHLSL
         }

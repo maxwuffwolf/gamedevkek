@@ -127,7 +127,37 @@ namespace Game.Editor
 
             foreach (var mat in m.Values) EditorUtility.SetDirty(mat);
             AssetDatabase.SaveAssets();
+            ApplyReadability();
             return m;
+        }
+
+        /// <summary>
+        /// Читаемость героя в тёмной сцене: тёмный контур + холодный «лунный» rim по силуэту.
+        /// Вызывается и при пересборке сцен (Овраг, Showcase), чтобы не пересобирать героя целиком.
+        /// Подкрутить руками: материалы в <see cref="MaterialsDir"/>, секции Outline и Rim.
+        /// </summary>
+        public static void ApplyReadability()
+        {
+            var outlineColor = new Color(0.035f, 0.025f, 0.06f);
+            var moonRim = new Color(0.62f, 0.76f, 1f);
+            void Set(string name, float outline, float rim, Color? rimColor = null, float rimPower = 2.6f)
+            {
+                var mat = AssetDatabase.LoadAssetAtPath<Material>($"{MaterialsDir}/{name}.mat");
+                if (mat == null || !mat.HasProperty("_OutlineWidth")) return;
+                mat.SetFloat("_OutlineWidth", outline);
+                mat.SetColor("_OutlineColor", outlineColor);
+                mat.SetFloat("_RimStrength", rim);
+                mat.SetFloat("_RimPower", rimPower);
+                if (rimColor.HasValue) mat.SetColor("_RimColor", rimColor.Value);
+                EditorUtility.SetDirty(mat);
+            }
+            Set("M_Hero_Skin", 1.6f, 0.45f, moonRim);
+            Set("M_Hero_Hair", 1.6f, 0.5f, new Color(1f, 0.85f, 0.55f), 2.2f); // золотые волосы ловят свет — главный ориентир «где герой»
+            Set("M_Hero_Cloth", 0f, 0.2f, moonRim);                            // тонкая двусторонняя ткань: контур на ней рябит
+            Set("M_Hero_Bracer", 1.6f, 0.5f, new Color(0.75f, 0.8f, 1f), 2.2f);
+            Set("M_Sword_Rusty", 1.4f, 0.3f, moonRim);                         // он же — меч в земле у скелета: контур подсвечивает «можно взять»
+            Set("M_Hero_Brows", 0f, 0.1f);
+            AssetDatabase.SaveAssets();
         }
 
         private static Material VertexColored(string name, float rim)
