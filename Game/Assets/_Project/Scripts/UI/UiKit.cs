@@ -21,7 +21,7 @@ namespace Game.UI
         public static readonly Color Inset = new(0.13f, 0.15f, 0.22f, 0.45f);             // вложенная плашка внутри окна
         public static readonly Color ButtonSoft = new(0.2f, 0.22f, 0.31f, 0.85f);         // вторичная кнопка
         public static readonly Color CellLocked = new(0f, 0f, 0f, 0.35f);
-        public static readonly Color Track = new(0f, 0f, 0f, 0.42f);                   // фон полос
+        public static readonly Color Track = new(0.02f, 0.025f, 0.05f, 0.72f);         // фон полос (тёмный, чтобы полосы не сливались со сценой)
         public static readonly Color Shade = new(0.024f, 0.031f, 0.055f, 0.55f);       // затемнение сцены под окном
 
         // текст
@@ -37,7 +37,7 @@ namespace Game.UI
         public static readonly Color Hp = new(0.545f, 0.863f, 0.565f, 1f);
         public static readonly Color HpLow = new(0.95f, 0.42f, 0.38f, 1f);
         public static readonly Color Mp = new(0.51f, 0.788f, 1f, 1f);
-        public static readonly Color Xp = new(0.945f, 0.835f, 0.608f, 0.9f);
+        public static readonly Color Xp = new(0.69f, 0.56f, 1f, 1f);                     // опыт — фиолетовый
         public static readonly Color Good = new(0.56f, 0.89f, 0.6f, 1f);
         public static readonly Color Bad = new(1f, 0.47f, 0.42f, 1f);
         public static readonly Color Enemy = new(0.88f, 0.35f, 0.3f, 1f);
@@ -315,11 +315,19 @@ namespace Game.UI
         /// <summary>Полоса: трек + заливка (скругления), заливка растёт через anchorMax.x.</summary>
         public static RectTransform Bar(Transform parent, string name, Color fill, out RectTransform fillRect)
         {
+            // тёмный трек (кант 2 px вокруг заливки) + тонкая светлая обводка + блик: полоса читается на любом фоне
             var track = Image(parent, name, UiTheme.Track).Round(UiTheme.RadiusPill).rectTransform;
             var f = Image(track, "Fill", fill).Round(UiTheme.RadiusPill).rectTransform;
             f.anchorMin = Vector2.zero;
             f.anchorMax = Vector2.one;
-            f.offsetMin = f.offsetMax = Vector2.zero;
+            f.offsetMin = new Vector2(2f, 2f);   // заливка внутри тёмного канта трека
+            f.offsetMax = new Vector2(-2f, -2f);
+            var gloss = Image(f, "Gloss", new Color(1f, 1f, 1f, 0.22f)).Round(UiTheme.RadiusPill).rectTransform; // блик сверху
+            gloss.anchorMin = new Vector2(0f, 0.55f);
+            gloss.anchorMax = Vector2.one;
+            gloss.offsetMin = new Vector2(3f, 0f);
+            gloss.offsetMax = new Vector2(-3f, -1f);
+            Outline(track, new Color(1f, 0.925f, 0.785f, 0.3f), UiTheme.RadiusPill, 1);
             fillRect = f;
             return track;
         }

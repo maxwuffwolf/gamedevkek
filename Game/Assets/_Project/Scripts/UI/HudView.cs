@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using Game.Core;
 using Game.Data;
-using Game.Gameplay.Actors;
 using Game.Gameplay.Combat;
 using Game.Gameplay.Progression;
 using Game.Gameplay.World;
@@ -13,8 +12,7 @@ namespace Game.UI
 {
     /// <summary>
     /// HUD в стиле «Тёплое стекло»: уровень и тонкие полосы HP/маны/опыта внизу по центру,
-    /// круглые навыки справа снизу (крупная обычная атака + слоты 1..=), зона слева сверху,
-    /// баланс наруча Свет/Тьма справа сверху.
+    /// круглые навыки справа снизу (крупная обычная атака + слоты 1..=), зона слева сверху.
     /// Пустые слоты после 4-го скрыты, чтобы не загромождать экран: появятся, когда в них будет навык.
     /// </summary>
     public sealed class HudView : MonoBehaviour
@@ -37,17 +35,15 @@ namespace Game.UI
             public Image Ring;
         }
 
-        private RectTransform _hpFill, _manaFill, _xpFill, _balanceFill, _balanceRoot, _skillsRoot;
+        private RectTransform _hpFill, _manaFill, _xpFill, _skillsRoot;
         private Image _hpFillImg;
-        private Text _hpText, _levelText, _zoneName, _zoneSub, _balanceLight, _balanceDark;
+        private Text _hpText, _levelText, _zoneName, _zoneSub;
         private readonly Slot[] _slots = new Slot[SkillBar.SlotCount];
         private ContentDatabase _db;
         private SkillBar _skillBar;
         private PlayerProfile _profile;
         private int _contentVersion = -1;
         private string _zoneId;
-        private HeroAppearance _appearance;
-        private Actor _appearanceOwner;
 
         public static HudView Create(RectTransform canvas)
         {
@@ -67,7 +63,6 @@ namespace Game.UI
             BuildVitals(root);
             BuildSkills(root);
             BuildZone(root);
-            BuildBalance(root);
 
             var hint = UiKit.Text(root, "Hint", "ЛКМ — атака / взаимодействие   1-0,-,= — навыки   B — инвентарь   ~ — консоль   F1 — читы",
                 14, new Color(1f, 1f, 1f, 0.4f)).Shadowed();
@@ -92,23 +87,23 @@ namespace Game.UI
 
             float x = levelSize + 16f;
             var hp = UiKit.Bar(group, "Health", UiTheme.Hp, out _hpFill);
-            hp.Place(new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(x, 8f), new Vector2(width, 12f));
+            hp.Place(new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(x, 10f), new Vector2(width, 16f));
             _hpFillImg = _hpFill.GetComponent<Image>();
             hp.GetComponent<Image>().raycastTarget = true;
             hp.gameObject.AddComponent<HoverTarget>().GetText = () =>
                 GameWorld.Player != null ? $"Здоровье: {Mathf.CeilToInt(GameWorld.Player.Health)} / {Mathf.CeilToInt(GameWorld.Player.MaxHealth)}" : "";
 
             _hpText = UiKit.Text(group, "HealthText", "", 15, UiTheme.Text, TextAnchor.LowerRight, FontStyle.Bold).Shadowed();
-            _hpText.rectTransform.Place(new Vector2(1f, 0.5f), new Vector2(1f, 0f), new Vector2(0f, 18f), new Vector2(240f, 20f));
+            _hpText.rectTransform.Place(new Vector2(1f, 0.5f), new Vector2(1f, 0f), new Vector2(0f, 22f), new Vector2(240f, 20f));
 
             var mp = UiKit.Bar(group, "Mana", UiTheme.Mp, out _manaFill);
-            mp.Place(new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(x, -8f), new Vector2(width, 8f));
+            mp.Place(new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(x, -6f), new Vector2(width, 11f));
             mp.GetComponent<Image>().raycastTarget = true;
             mp.gameObject.AddComponent<HoverTarget>().GetText = () =>
                 GameWorld.Player != null ? $"Мана: {Mathf.FloorToInt(GameWorld.Player.Mana)} / {Mathf.CeilToInt(GameWorld.Player.MaxMana)}" : "";
 
             var xp = UiKit.Bar(group, "Xp", UiTheme.Xp, out _xpFill);
-            xp.Place(new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(x, -20f), new Vector2(width * 0.5f, 4f));
+            xp.Place(new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(x, -18f), new Vector2(width, 8f));
         }
 
         // ------------------------------------------------------------ навыки
@@ -229,44 +224,6 @@ namespace Game.UI
             _zoneSub.text = zone?.Subtitle ?? "";
         }
 
-        // ------------------------------------------------------------ баланс наруча
-
-        private void BuildBalance(RectTransform root)
-        {
-            _balanceRoot = UiKit.Panel(root, "Balance", UiTheme.PanelSoft, UiTheme.RadiusPill, UiTheme.Line).rectTransform;
-            _balanceRoot.Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-Margin, -36f), new Vector2(300f, 38f));
-            _balanceLight = UiKit.Text(_balanceRoot, "Light", "", 14, UiTheme.Gold, TextAnchor.MiddleLeft, FontStyle.Bold);
-            _balanceLight.rectTransform.Place(new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(16f, 0f), new Vector2(80f, 24f));
-            _balanceDark = UiKit.Text(_balanceRoot, "Dark", "", 14, UiTheme.Violet, TextAnchor.MiddleRight, FontStyle.Bold);
-            _balanceDark.rectTransform.Place(new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(-16f, 0f), new Vector2(80f, 24f));
-            var track = UiKit.Image(_balanceRoot, "Track", UiTheme.Violet).Round(UiTheme.RadiusPill).rectTransform;
-            track.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(120f, 6f));
-            _balanceFill = UiKit.Image(track, "Fill", UiTheme.Gold).Round(UiTheme.RadiusPill).rectTransform;
-            _balanceFill.anchorMin = Vector2.zero;
-            _balanceFill.anchorMax = new Vector2(0.5f, 1f);
-            _balanceFill.offsetMin = _balanceFill.offsetMax = Vector2.zero;
-            _balanceRoot.gameObject.AddComponent<HoverTarget>().GetText = () =>
-                "<size=20><b>Наруч</b></size>\nБаланс Света и Тьмы. Кристалл впитывает энергию убитых врагов.";
-            _balanceRoot.gameObject.SetActive(false);
-        }
-
-        private void RefreshBalance(Actor player)
-        {
-            if (_appearanceOwner != player)
-            {
-                _appearanceOwner = player;
-                _appearance = player != null ? player.GetComponentInChildren<HeroAppearance>() : null;
-            }
-            bool has = _appearance != null;
-            if (_balanceRoot.gameObject.activeSelf != has) _balanceRoot.gameObject.SetActive(has);
-            if (!has) return;
-            float b = Mathf.Clamp01(_appearance.Balance);
-            int light = Mathf.RoundToInt(b * 100f);
-            _balanceFill.anchorMax = new Vector2(b, 1f);
-            _balanceLight.text = $"Свет {light}";
-            _balanceDark.text = $"{100 - light} Тьма";
-        }
-
         // ------------------------------------------------------------ обновление
 
         private void Update()
@@ -275,7 +232,6 @@ namespace Game.UI
             if (Services.TryGet<ZoneService>(out var zones) && (zones.CurrentZoneId ?? "") != _zoneId) RefreshZone();
 
             var player = GameWorld.Player;
-            RefreshBalance(player);
             if (player == null) return;
 
             float hp01 = Mathf.Clamp01(player.Health01);
