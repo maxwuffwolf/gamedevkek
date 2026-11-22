@@ -127,10 +127,16 @@ namespace Game.Editor
         /// <summary>Поставить модель: случайный поворот вокруг оси Y, без коллайдеров и теней от мелочи.</summary>
         public static GameObject Place(GameObject model, Transform parent, Vector3 pos, float yaw, float scale, bool castShadows = false)
         {
-            var go = (GameObject)PrefabUtility.InstantiatePrefab(model, parent);
+            // FBX из Blender несёт свой поворот осей (Z-up → Y-up) на корне модели: его нельзя затирать,
+            // иначе модель ляжет набок. Поэтому ставим пустой родитель (позиция/поворот/масштаб),
+            // а модель внутри оставляем как импортирована.
+            var go = new GameObject(model.name);
+            go.transform.SetParent(parent, false);
             go.transform.position = pos;
             go.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
             go.transform.localScale = Vector3.one * scale;
+            var inst = (GameObject)PrefabUtility.InstantiatePrefab(model, go.transform);
+            inst.transform.localPosition = Vector3.zero;
             foreach (var r in go.GetComponentsInChildren<Renderer>())
                 r.shadowCastingMode = castShadows ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
             return go;

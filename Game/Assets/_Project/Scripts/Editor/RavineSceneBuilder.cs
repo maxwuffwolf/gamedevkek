@@ -410,7 +410,8 @@ namespace Game.Editor
             var root = new GameObject("Debris").transform;
             root.SetParent(parent);
             var rockPrefabs = EnvironmentPrefabs.Load("Rock");
-            var bushPrefabs = EnvironmentPrefabs.Load("Bush");
+            var detailBushes = ForestDetails.LoadAll("Det_Bush_Round", "Det_Bush_Blue", "Det_Bush_Flower", "Det_Berry_Blue");
+            var bushPrefabs = detailBushes.Length > 0 ? detailBushes : EnvironmentPrefabs.Load("Bush"); // детальные кусты вместо шаров из forest_kit
             var grassPrefabs = EnvironmentPrefabs.Load("Grass");
             var rockMat = ShowcaseSceneBuilder.Mat("Rock", new Color(0.48f, 0.48f, 0.5f));
             var logMat = ShowcaseSceneBuilder.Mat("DeadWood", new Color(0.33f, 0.25f, 0.2f));
@@ -434,7 +435,7 @@ namespace Game.Editor
             {
                 float z = Range(ZMin + 2f, ZMax - 2f), across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.6f, 0.95f);
                 var p = Floor(z, across);
-                if (!Reserved(p, across)) PlacePrefab(root, bushPrefabs, p, 0.7f, 1.2f);
+                if (!Reserved(p, across)) { if (detailBushes.Length > 0) ForestDetails.Place(detailBushes[_rng.Next(detailBushes.Length)], root, p, Range(0f, 360f), Range(1.3f, 2.0f)); else PlacePrefab(root, bushPrefabs, p, 0.7f, 1.2f); }
             }
             for (int i = 0; grassPrefabs.Length > 0 && i < 160; i++)
             {
@@ -688,7 +689,8 @@ namespace Game.Editor
             };
             var rockPrefabs = EnvironmentPrefabs.Load("Rock");
             var grassPrefabs = EnvironmentPrefabs.Load("Grass");
-            var bushPrefabs = EnvironmentPrefabs.Load("Bush");
+            var detailBushes = ForestDetails.LoadAll("Det_Bush_Round", "Det_Bush_Blue", "Det_Bush_Flower", "Det_Berry_Blue");
+            var bushPrefabs = detailBushes.Length > 0 ? detailBushes : EnvironmentPrefabs.Load("Bush"); // детальные кусты вместо шаров из forest_kit
 
             GameObject Piece(PrimitiveType t, string name, Vector3 pos, Vector3 scale, Quaternion rot, Material m)
             {
@@ -804,7 +806,7 @@ namespace Game.Editor
                 float z = Range(ZMin + 2f, ZMax - 2f);
                 float across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.85f, 1f);
                 var p = Floor(z, across);
-                if (!Reserved(p, across)) PlacePrefab(root, bushPrefabs, p, 0.5f, 0.9f);
+                if (!Reserved(p, across)) { if (detailBushes.Length > 0) ForestDetails.Place(detailBushes[_rng.Next(detailBushes.Length)], root, p, Range(0f, 360f), Range(1.3f, 2.0f)); else PlacePrefab(root, bushPrefabs, p, 0.5f, 0.9f); }
             }
         }
 
