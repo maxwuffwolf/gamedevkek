@@ -7,10 +7,11 @@
 #       Hero_Loincloth   — набедренная повязка из мешковины с обгоревшим краем (скиннинг к тазу/бёдрам);
 #       Hero_Bracer      — иномирный наруч на левом предплечье, грани, цвета побежалости на краях;
 #       Hero_BracerCrystal — двухцветный кристалл в гнезде наруча (половины помечены цветом вершин);
-#       Wpn_Sword_Rusty  — ржавый меч в правой руке (к кости hand_r);
+#       Wpn_Sword_Rusty  — ржавый меч в правой руке (к кости hand_r), модель из lowpoly_kit.py;
 #   * помечает цветом вершин правый/левый глаз (для гетерохромии в шейдере);
 #   * готовит текстуры: кожа, глаза (с маской радужки в альфе), брови;
 #   * экспортирует Hero.fbx (+ отдельно Wpn_Sword_Rusty.fbx для лута/скелета) и картинку-превью.
+#   (Поменять только меч, не пересобирая героя: ravine_props.py --hero hero.blend.)
 #
 # Запуск (Blender 4.x/5.x или pip-пакет bpy):
 #   blender -b -P hero_build.py -- --ubc "<папка Universal Base Characters[Standard]>" --out <папка> [--preview hero.png]
@@ -23,9 +24,13 @@ import random
 import shutil
 import sys
 
-import bpy  # bpy первым: в режиме модуля bmesh доступен только после него
-import bmesh
-from mathutils import Matrix, Vector, noise
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import bpy  # noqa: E402  bpy первым: в режиме модуля bmesh доступен только после него
+import bmesh  # noqa: E402
+from mathutils import Matrix, Vector, noise  # noqa: E402
+
+from lowpoly_kit import build_rusty_sword  # noqa: E402
 
 SEED = 11
 
@@ -525,92 +530,9 @@ def build_bracer(rng, arm, pts):
 # ---------------------------------------------------------------- меч
 
 def build_sword(rng, name="Wpn_Sword_Rusty"):
-    """Меч вдоль +Z, точка опоры в центре рукояти."""
-    bm = bmesh.new()
-    guard_z = 0.095
-    blade_len = 0.76
-    rows = 20
-    prev = None
-    for r in range(rows + 1):
-        t = r / rows
-        z = guard_z + 0.012 + blade_len * t
-        w = 0.036 * (1 - 0.3 * t) if t < 0.86 else 0.036 * 0.74 * (1 - t) / 0.14
-        w = max(w, 0.0015)
-        th = 0.0065 * (1 - 0.6 * t)
-        wl, wr = w, w
-        if 0 < r < rows and rng.random() < 0.35:  # сколы и зазубрины
-            if rng.random() < 0.5:
-                wl -= rng.uniform(0.004, 0.012) * (1 - t * 0.5)
-            else:
-                wr -= rng.uniform(0.004, 0.012) * (1 - t * 0.5)
-        if r == rows:
-            ring = [bm.verts.new((0, 0, z + 0.03))]
-        else:
-            ring = [bm.verts.new((wl, 0, z)), bm.verts.new((0, th, z)), bm.verts.new((-wr, 0, z)), bm.verts.new((0, -th, z))]
-        if prev:
-            if len(ring) == 1:
-                for i in range(4):
-                    bm.faces.new((prev[i], prev[(i + 1) % 4], ring[0]))
-            else:
-                for i in range(4):
-                    bm.faces.new((prev[i], prev[(i + 1) % 4], ring[(i + 1) % 4], ring[i]))
-        else:
-            bm.faces.new(list(reversed(ring)))
-        prev = ring
-
-    def box(c, size, droop=0.0):
-        sx, sy, sz = size
-        vs = []
-        for dz in (-1, 1):
-            for dy in (-1, 1):
-                for dx in (-1, 1):
-                    x = c[0] + dx * sx
-                    vs.append(bm.verts.new((x, c[1] + dy * sy, c[2] + dz * sz - droop * (x / sx) ** 2 * sx)))
-        for f in ((0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)):
-            bm.faces.new([vs[i] for i in f])
-
-    # гарда: прямая крестовина, концы чуть опущены
-    box((0, 0, guard_z), (0.085, 0.013, 0.011), droop=0.012)
-    # рукоять: восьмигранник, обмотка местами сгнила
-    seg = 8
-    zs = [-0.085, -0.06, -0.035, -0.01, 0.015, 0.04, 0.065, 0.084]
-    rings = []
-    for i, z in enumerate(zs):
-        r = 0.0135 if i in (0, len(zs) - 1) else (0.0165 if i % 2 else 0.0150)
-        if i in (1, 2):
-            r = 0.0125  # тут обмотка слезла — видно дерево
-        rings.append([bm.verts.new((math.cos(2 * math.pi * k / seg) * r, math.sin(2 * math.pi * k / seg) * r, z)) for k in range(seg)])
-    for a_, b_ in zip(rings[:-1], rings[1:]):
-        for k in range(seg):
-            j = (k + 1) % seg
-            bm.faces.new((a_[k], a_[j], b_[j], b_[k]))
-    bm.faces.new(list(reversed(rings[0])))
-    bm.faces.new(rings[-1])
-    # навершие
-    pm = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=0.021)
-    for v in pm["verts"]:
-        v.co.z = v.co.z * 0.8 - 0.103
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    obj = new_object(name, bm, "M_Sword_Rusty")
-
-    def col(c, nrm, p):
-        n1 = noise.noise(c * 18.0 + Vector((3.1, 0, 0))) * 0.5 + 0.5
-        n2 = noise.noise(c * 55.0) * 0.5 + 0.5
-        if c.z > guard_z + 0.01:  # клинок
-            rust = smooth(0.38, 0.62, n1 * 0.8 + n2 * 0.35)
-            base = lerp3(STEEL, RUST, rust)
-            base = lerp3(base, RUST_DARK, smooth(0.7, 0.95, n2) * rust)
-            if abs(c.x) > 0.02 and rust < 0.4:
-                base = lerp3(base, (0.6, 0.6, 0.6), 0.25)  # кромка чуть светлее
-            return base
-        if c.z > guard_z - 0.02 or c.z < -0.088:  # гарда и навершие
-            return lerp3(IRON, RUST_DARK, smooth(0.4, 0.8, n1))
-        r = math.hypot(c.x, c.y)
-        if r < 0.0135 or n2 > 0.72:
-            return WOOD if n1 > 0.3 else lerp3(WOOD, RUST_DARK, 0.4)
-        return lerp3(LEATHER, (0.16, 0.10, 0.06), n2)
-    face_colors(obj, col)
-    return obj
+    """Меч вдоль +Z, точка опоры в центре рукояти. Модель общая с мечом в овраге (ravine_props.py):
+    lowpoly_kit.build_rusty_sword — клинок с долом и сколами, изогнутая гарда, обмотка, дисковое навершие."""
+    return build_rusty_sword(name, "M_Sword_Rusty")
 
 
 def place_sword_in_hand(arm, sword):

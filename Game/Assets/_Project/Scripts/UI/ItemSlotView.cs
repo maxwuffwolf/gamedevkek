@@ -17,6 +17,9 @@ namespace Game.UI
     {
         public bool IsEquipment;
         public int BackpackIndex = -1;
+        /// <summary>Ячейка окна контейнера (сундук, труп): индекс >= 0.</summary>
+        public int ContainerIndex = -1;
+        public bool IsContainer => ContainerIndex >= 0;
         public EquipSlot EquipSlot;
 
         public Func<ItemInstance> GetItem;
@@ -31,6 +34,9 @@ namespace Game.UI
         private Text _placeholder;
         private bool _hovered;
         private string _placeholderLabel;
+
+        /// <summary>Подсказка для ячеек рюкзака, пока открыт сундук (задаёт ContainerView).</summary>
+        public static string ContainerHint;
 
         private static ItemSlotView _dragSource;
         private static Image _dragGhost;
@@ -109,7 +115,9 @@ namespace Game.UI
                 return;
             }
             var db = Services.Get<ContentDatabase>();
-            string hint = IsEquipment ? "ПКМ — снять" : "ПКМ — надеть · перетащи, чтобы переложить";
+            string hint = IsContainer ? "ПКМ — взять в рюкзак · или перетащи"
+                : IsEquipment ? "ПКМ — снять"
+                : ContainerHint ?? "ПКМ — надеть · перетащи, чтобы переложить";
             TooltipView.Instance.Show(this, TooltipView.ItemText(db, item, hint), db.RarityColor(item.Rarity));
         }
 
@@ -180,6 +188,7 @@ namespace Game.UI
         {
             _dragSource = null;
             _dragGhost = null;
+            ContainerHint = null;
         }
     }
 }

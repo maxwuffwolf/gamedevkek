@@ -16,7 +16,7 @@ namespace Game.Meta
     /// <summary>Формат сейва. При изменении структуры: Version++ и миграция в SaveService.Migrate.</summary>
     public sealed class SaveData
     {
-        public const int CurrentVersion = 1;
+        public const int CurrentVersion = 2;
 
         public int Version = CurrentVersion;
         public string SavedAt;
@@ -29,6 +29,8 @@ namespace Game.Meta
         public List<ItemInstance> Backpack = new();
         public Dictionary<EquipSlot, ItemInstance> Equipped = new();
         public List<QuestProgress> Quests = new();
+        /// <summary>v2: содержимое открытых контейнеров (сундуки, «меч в земле»), чтобы забранное не появлялось снова.</summary>
+        public List<ContainerState> Containers = new();
     }
 
     /// <summary>
@@ -60,6 +62,7 @@ namespace Game.Meta
             EventBus.Subscribe<InventoryChangedEvent>(_ => MarkDirty());
             EventBus.Subscribe<QuestChangedEvent>(_ => MarkDirty());
             EventBus.Subscribe<ProfileChangedEvent>(_ => MarkDirty());
+            EventBus.Subscribe<ContainerChangedEvent>(_ => MarkDirty());
         }
 
         public void SetSlot(string slot) => Slot = string.IsNullOrWhiteSpace(slot) ? "main" : slot.Trim();
@@ -121,8 +124,9 @@ namespace Game.Meta
 
         private static void Migrate(SaveData data)
         {
-            // Пример на будущее:
-            // if (data.Version < 2) { ...; data.Version = 2; }
+            // v1 → v2: появились контейнеры (у старых сейвов их просто нет)
+            if (data.Version < 2) data.Containers ??= new List<ContainerState>();
+            data.Containers ??= new List<ContainerState>();
             data.Version = SaveData.CurrentVersion;
         }
 
@@ -143,6 +147,7 @@ namespace Game.Meta
                 Backpack = inv.SnapshotBackpack().ToList(),
                 Equipped = inv.Equipped.ToDictionary(kv => kv.Key, kv => kv.Value),
                 Quests = quests.All.ToList(),
+                Containers = Services.Get<ContainerService>().Capture(),
             };
         }
 
@@ -158,6 +163,7 @@ namespace Game.Meta
                 int size = Math.Max(data.BackpackSize, charDef?.Backpack.Size ?? 40);
                 Services.Get<Inventory>().SetState(size, data.BackpackUnlocked, data.Backpack, data.Equipped);
                 Services.Get<QuestService>().SetState(data.Quests);
+                Services.Get<ContainerService>().SetState(data.Containers);
             }
             finally
             {
@@ -178,6 +184,7 @@ namespace Game.Meta
                 var def = profile.Character;
                 profile.SetState(1, 0, 0);
                 Services.Get<QuestService>().ResetAll();
+                Services.Get<ContainerService>().Reset();
                 inv.SetState(def?.Backpack.Size ?? 40, def?.Backpack.Unlocked ?? 12, null, null);
                 if (def != null)
                 {

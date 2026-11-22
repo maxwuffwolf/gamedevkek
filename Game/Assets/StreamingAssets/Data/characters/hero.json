@@ -1,5 +1,5 @@
 {
-  "_comment": "Герой. stats — база на 1 уровне, perLevel — прирост за уровень. skillBar — 12 слотов (клавиши 1..0, -, =).",
+  "_comment": "Герой. stats — база на 1 уровне, perLevel — прирост за уровень. skillBar — 12 слотов (клавиши 1..0, -, =). Ржавого меча в startingItems нет: по сюжету герой берёт его у скелета в овраге (containers/containers.json, ravine_rusty_sword).",
   "characters": [
     {
       "id": "hero", "name": "Странник", "prefab": "hero",
@@ -13,7 +13,6 @@
       "skillBar": ["heavy_strike"],
       "backpack": { "size": 40, "unlocked": 12 },
       "startingItems": [
-        { "id": "sword_rusty", "rarity": "common", "equip": true },
         { "id": "vest_leather", "rarity": "common", "equip": false },
         { "id": "boots_leather", "rarity": "common", "equip": false }
       ],

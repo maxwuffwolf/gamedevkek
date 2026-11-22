@@ -61,7 +61,9 @@ namespace Game.App
             Services.Register(inventory);
             var generator = new ItemGenerator(db, rng);
             Services.Register(generator);
-            Services.Register(new LootService(db, generator, rng));
+            var loot = new LootService(db, generator, rng);
+            Services.Register(loot);
+            Services.Register(new ContainerService(db, generator, loot, rng));
             var quests = new QuestService(db);
             Services.Register(quests);
             Services.Register(new DialogueService(db, quests));
