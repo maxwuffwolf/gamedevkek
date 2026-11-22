@@ -43,6 +43,7 @@ namespace Game.Editor
             var env = new GameObject("Environment").transform;
             var gameplay = new GameObject("Gameplay").transform;
 
+            HeroBuilder.ApplyReadability();
             BuildLighting(env);
             BuildCamera();
             BuildGround(env);

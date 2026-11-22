@@ -27,12 +27,16 @@ Shader "Game/Stylized Toon"
         _ShadowColor ("Shadow tint", Color) = (0.42, 0.4, 0.62, 1)
         [IntRange] _Steps ("Light steps", Range(1, 5)) = 2
         _StepSmooth ("Step softness", Range(0.001, 0.5)) = 0.06
+        _PointSmooth ("Point lights: 0 toon steps, 1 soft pools", Range(0, 1)) = 1
         _AmbientStrength ("Ambient strength", Range(0, 1)) = 0.35
 
         [Header(Rim)]
         _RimColor ("Rim color", Color) = (1, 0.93, 0.78, 1)
         _RimPower ("Rim power", Range(0.5, 8)) = 3.5
         _RimStrength ("Rim strength", Range(0, 1)) = 0.2
+
+        [Header(Emission)]
+        [HDR] _EmissionColor ("Emission (HDR, >1 glows through Bloom)", Color) = (0, 0, 0, 1)
 
         [Header(Wind foliage)]
         _WindStrength ("Wind strength", Range(0, 0.3)) = 0
@@ -69,10 +73,12 @@ Shader "Game/Stylized Toon"
             half4 _ShadowColor;
             half _Steps;
             half _StepSmooth;
+            half _PointSmooth;
             half _AmbientStrength;
             half4 _RimColor;
             half _RimPower;
             half _RimStrength;
+            half4 _EmissionColor;
             float _WindStrength;
             float _WindSpeed;
             float _WindScale;
@@ -213,8 +219,11 @@ Shader "Game/Stylized Toon"
                     uint lightCount = GetAdditionalLightsCount();
                     LIGHT_LOOP_BEGIN(lightCount)
                         Light l = GetAdditionalLight(lightIndex, input.positionWS);
+                        // мягкий «бассейн» света вместо ступенек: ступенчатый точечный свет рисует на земле жёсткие круги
                         half a = saturate(dot(n, l.direction)) * l.distanceAttenuation;
-                        light += l.color * Band(saturate(a), _Steps, _StepSmooth);
+                        half att = l.distanceAttenuation;
+                        half aSoft = saturate((dot(n, l.direction) + 0.25) / 1.25) * att / (1.0 + att); // мягкое насыщение: вблизи источника не «выжигает»
+                        light += l.color * lerp(Band(saturate(a), _Steps, _StepSmooth), aSoft, _PointSmooth);
                     LIGHT_LOOP_END
                 #endif
 
@@ -226,6 +235,7 @@ Shader "Game/Stylized Toon"
                 // --- rim: светлый ободок по силуэту, сильнее на освещённой стороне
                 half rim = pow(1.0 - saturate(dot(n, v)), _RimPower);
                 color += _RimColor.rgb * rim * _RimStrength * (0.35 + 0.65 * band);
+                color += _EmissionColor.rgb;
 
                 color = MixFog(color, input.fogFactor);
                 return half4(color, 1);

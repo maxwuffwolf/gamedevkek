@@ -26,7 +26,7 @@ namespace Game.Editor
         /// Версия настроек атмосферы. Если поднять её, при следующей пересборке сцены профиль пост-обработки
         /// и материалы (эффекты, окружение) перезапишутся значениями из кода. Иначе ручные правки сохраняются.
         /// </summary>
-        public const int SettingsVersion = 3;
+        public const int SettingsVersion = 8;
         private const string VersionKey = "Game.Atmosphere.SettingsVersion";
 
         /// <summary>true, пока идёт пересборка, где ассеты нужно обновить до <see cref="SettingsVersion"/>.</summary>
@@ -42,13 +42,17 @@ namespace Game.Editor
 
         // --- поздние сумерки, ~20:00–22:00: солнце село, ключевой свет — холодное небо/луна,
         //     на западе догорает тёплая полоска заката, главные тёплые пятна — костёр, светлячки и свет героя
-        public static readonly Color SunColor = new Color(0.58f, 0.68f, 1f);      // лунный ключевой свет
+        //     v4 (визуал «как у Shape of Dreams»): общий свет темнее, чтобы локальные источники (грибы, кристаллы,
+        //     светлячки, свет героя) стали яркими пятнами, за которые цепляется глаз. Контраст делает пост-обработка.
+        public static readonly Color SunColor = new Color(0.55f, 0.66f, 1f);      // лунный ключевой свет
+        public const float SunIntensity = 1f;
         public static readonly Color FillColor = new Color(1f, 0.5f, 0.3f);       // отсвет заката у горизонта
-        public static readonly Color FogColor = new Color(0.15f, 0.17f, 0.29f);
-        public static readonly Color SkyAmbient = new Color(0.26f, 0.3f, 0.52f);
-        public static readonly Color EquatorAmbient = new Color(0.25f, 0.22f, 0.36f);
-        public static readonly Color GroundAmbient = new Color(0.1f, 0.09f, 0.14f);
-        public const float FogDensity = 0.014f;
+        public const float FillIntensity = 0.32f;
+        public static readonly Color FogColor = new Color(0.07f, 0.08f, 0.16f);
+        public static readonly Color SkyAmbient = new Color(0.2f, 0.23f, 0.42f);
+        public static readonly Color EquatorAmbient = new Color(0.15f, 0.14f, 0.25f);
+        public static readonly Color GroundAmbient = new Color(0.04f, 0.035f, 0.065f);
+        public const float FogDensity = 0.012f;
 
         /// <summary>
         /// Луна высоко (50°): плоская земля в toon-шейдере остаётся в «светлой» ступени, всё читается.
@@ -72,7 +76,7 @@ namespace Game.Editor
             var sun = sunGo.AddComponent<Light>();
             sun.type = LightType.Directional;
             sun.color = SunColor;
-            sun.intensity = 0.95f;
+            sun.intensity = SunIntensity;
             sun.shadows = LightShadows.Soft;
             sun.shadowStrength = 0.8f;
             RenderSettings.sun = sun;
@@ -84,7 +88,7 @@ namespace Game.Editor
             var fill = fillGo.AddComponent<Light>();
             fill.type = LightType.Directional;
             fill.color = FillColor;
-            fill.intensity = 0.45f;
+            fill.intensity = FillIntensity;
             fill.shadows = LightShadows.None;
 
             RenderSettings.ambientMode = AmbientMode.Trilight;
@@ -116,7 +120,12 @@ namespace Game.Editor
         // ------------------------------------------------------------------ эффекты
 
         /// <summary>Volume, лучи, дымка, светлячки, роса. Вызывать после того, как лес расставлен.</summary>
-        public static void BuildEffects(Transform parent, System.Random rng)
+        public static void BuildEffects(Transform parent, System.Random rng) =>
+            BuildEffects(parent, rng, new Vector3(0f, 0f, 8f), new Vector2(80f, 80f));
+
+        /// <param name="center">Центр игровой области (частицы рождаются вокруг него).</param>
+        /// <param name="size">Размер области по X и Z, метры. Чем меньше область, тем гуще частицы.</param>
+        public static void BuildEffects(Transform parent, System.Random rng, Vector3 center, Vector2 size)
         {
             EnvironmentPrefabs.EnsureFolder(Dir);
             var root = new GameObject("Atmosphere").transform;
@@ -131,9 +140,10 @@ namespace Game.Editor
 
             if (LightShafts) BuildLightShafts(root, rng);
             BuildHeroLight(root);
-            BuildGroundMist(root);
-            BuildFireflies(root);
-            BuildDew(root);
+            BuildGroundMist(root, center, size);
+            BuildFireflies(root, center, size);
+            BuildMotes(root, center, size);
+            BuildDew(root, center, size);
         }
 
         private static VolumeProfile GetOrCreateProfile()
@@ -152,40 +162,44 @@ namespace Game.Editor
                 profile.components.Clear();
             }
 
-            // Neutral, а не ACES: ACES красиво, но сильно темнит средние тона и съедает читаемость
+            // ACES: «киношная» кривая — тёмные тени, сочные цвета, мягко пережатые яркие пятна (на них и держится Bloom).
+            // ACES темнит средние тона, поэтому сразу компенсируем экспозицией.
             var tone = Add<Tonemapping>(profile);
-            tone.mode.Override(TonemappingMode.Neutral);
+            tone.mode.Override(TonemappingMode.ACES);
 
+            // Bloom: всё, что ярче порога (эмиссия грибов/кристаллов, светлячки, искры, глаза), получает ореол
             var bloom = Add<Bloom>(profile);
-            bloom.threshold.Override(0.9f);
-            bloom.intensity.Override(1f);
-            bloom.scatter.Override(0.7f);
-            bloom.tint.Override(new Color(1f, 0.88f, 0.75f));
+            bloom.threshold.Override(0.8f);
+            bloom.intensity.Override(1.1f);
+            bloom.scatter.Override(0.72f);
+            bloom.tint.Override(new Color(1f, 0.95f, 0.9f));
             bloom.highQualityFiltering.Override(true);
 
             var color = Add<ColorAdjustments>(profile);
-            color.postExposure.Override(0.15f);
-            color.contrast.Override(8f);
-            color.saturation.Override(4f);
+            color.postExposure.Override(0.85f);
+            color.contrast.Override(20f);
+            color.saturation.Override(6f);
 
-            // чуть поднятые полутона — картинка светлее, но без белёсости
+            // тени чуть опускаем и холодим (было: подняты — отсюда «серость»), света слегка тёплые
             var lgg = Add<LiftGammaGain>(profile);
-            lgg.lift.Override(new Vector4(1f, 1f, 1f, 0.02f));
-            lgg.gamma.Override(new Vector4(1f, 1f, 1f, 0.06f));
+            lgg.lift.Override(new Vector4(1f, 1f, 1.04f, 0f)); // без отрицательного сдвига: он даёт цветные «кольца» в тёмных местах
+            lgg.gamma.Override(new Vector4(1f, 1f, 1f, 0f));
+            lgg.gain.Override(new Vector4(1.04f, 1f, 0.95f, 0.03f));
 
             var wb = Add<WhiteBalance>(profile);
-            wb.temperature.Override(-8f);
+            wb.temperature.Override(-6f);
 
-            // лёгкая кино-раскраска: тени холоднее, света теплее
+            // кино-раскраска: тени в синеву, света в золото
             var split = Add<SplitToning>(profile);
-            split.shadows.Override(new Color(0.3f, 0.36f, 0.62f));
+            split.shadows.Override(new Color(0.28f, 0.34f, 0.66f));
             split.highlights.Override(new Color(1f, 0.74f, 0.5f));
-            split.balance.Override(0f);
+            split.balance.Override(-15f);
 
+            // виньетка: края кадра темнее, внимание в центр, к герою
             var vignette = Add<Vignette>(profile);
-            vignette.color.Override(new Color(0.02f, 0.02f, 0.06f));
-            vignette.intensity.Override(0.32f);
-            vignette.smoothness.Override(0.5f);
+            vignette.color.Override(new Color(0.01f, 0.01f, 0.04f));
+            vignette.intensity.Override(0.4f);
+            vignette.smoothness.Override(0.45f);
 
             EditorUtility.SetDirty(profile);
             AssetDatabase.SaveAssets();
@@ -285,16 +299,17 @@ namespace Game.Editor
             go.transform.position = new Vector3(0f, 3f, -3f);
             var l = go.AddComponent<Light>();
             l.type = LightType.Point;
-            l.color = new Color(1f, 0.86f, 0.72f);
-            l.range = 9f;
-            l.intensity = 2.2f;
+            // тёплое пятно вокруг героя на холодной земле: герой всегда стоит «в свете» и читается на фоне
+            l.color = new Color(1f, 0.8f, 0.58f);
+            l.range = 8f;
+            l.intensity = 7f;
             l.shadows = LightShadows.None;
-            go.AddComponent<Game.Gameplay.World.HeroLight>();
+            go.AddComponent<Game.Gameplay.World.HeroLight>().Height = 2.2f; // ниже — ярче и уже пятно на земле
         }
 
         // --- частицы
 
-        private static void BuildGroundMist(Transform parent)
+        private static void BuildGroundMist(Transform parent, Vector3 center, Vector2 size)
         {
             var mat = GetOrCreateMaterial("M_Mist", "Game/Soft Particle", m =>
             {
@@ -305,22 +320,23 @@ namespace Game.Editor
             });
             if (mat == null) return;
 
-            var ps = NewParticles(parent, "GroundMist", new Vector3(0f, 0.5f, 8f), mat);
+            var ps = NewParticles(parent, "GroundMist", center + new Vector3(0f, 0.5f, 0f), mat);
             var main = ps.main;
             main.startLifetime = new ParticleSystem.MinMaxCurve(14f, 22f);
             main.startSpeed = new ParticleSystem.MinMaxCurve(0.02f, 0.12f);
             main.startSize = new ParticleSystem.MinMaxCurve(5f, 9f);
             main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
-            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.42f, 0.48f, 0.7f, 0.1f), new Color(0.5f, 0.52f, 0.72f, 0.07f));
-            main.maxParticles = 200;
+            // клочья дымки над землёй: в тёмной сцене светлый туман и даёт «глубину»
+            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.4f, 0.48f, 0.78f, 0.13f), new Color(0.52f, 0.5f, 0.8f, 0.09f));
+            main.maxParticles = 260;
 
             var em = ps.emission;
-            em.rateOverTime = 11f;
+            em.rateOverTime = Density(size, 11f, 18f);
 
             var shape = ps.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Box;
-            shape.scale = new Vector3(96f, 0.5f, 96f);
+            shape.scale = new Vector3(size.x + 16f, 0.5f, size.y + 16f);
             shape.randomDirectionAmount = 1f;
 
             var rot = ps.rotationOverLifetime;
@@ -332,7 +348,7 @@ namespace Game.Editor
             r.maxParticleSize = 3f;
         }
 
-        private static void BuildFireflies(Transform parent)
+        private static void BuildFireflies(Transform parent, Vector3 center, Vector2 size)
         {
             var mat = GetOrCreateMaterial("M_Firefly", "Game/Soft Particle", m =>
             {
@@ -344,21 +360,21 @@ namespace Game.Editor
             });
             if (mat == null) return;
 
-            var ps = NewParticles(parent, "Fireflies", new Vector3(0f, 1.4f, 8f), mat);
+            var ps = NewParticles(parent, "Fireflies", center + new Vector3(0f, 1.4f, 0f), mat);
             var main = ps.main;
             main.startLifetime = new ParticleSystem.MinMaxCurve(6f, 11f);
             main.startSpeed = new ParticleSystem.MinMaxCurve(0f, 0.15f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.12f, 0.22f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.13f, 0.24f);
             main.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.9f, 0.55f), new Color(0.8f, 1f, 0.6f));
-            main.maxParticles = 220;
+            main.maxParticles = 400;
 
             var em = ps.emission;
-            em.rateOverTime = 24f;
+            em.rateOverTime = Density(size, 24f, 40f);
 
             var shape = ps.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Box;
-            shape.scale = new Vector3(80f, 2.2f, 80f);
+            shape.scale = new Vector3(size.x, 2.4f, size.y);
             shape.randomDirectionAmount = 1f;
 
             var noise = ps.noise;
@@ -374,7 +390,7 @@ namespace Game.Editor
             col.color = new ParticleSystem.MinMaxGradient(Blink(0f, 0.1f, 1f, 0.25f, 0.25f, 0.45f, 1f, 0.6f, 0.15f, 0.8f, 0.9f, 1f, 0f));
         }
 
-        private static void BuildDew(Transform parent)
+        private static void BuildDew(Transform parent, Vector3 center, Vector2 size)
         {
             var mat = GetOrCreateMaterial("M_Dew", "Game/Soft Particle", m =>
             {
@@ -387,7 +403,7 @@ namespace Game.Editor
             if (mat == null) return;
 
             // крошечные блики росы на траве: вспыхивают и гаснут
-            var ps = NewParticles(parent, "DewGlints", new Vector3(0f, 0.25f, 8f), mat);
+            var ps = NewParticles(parent, "DewGlints", center + new Vector3(0f, 0.25f, 0f), mat);
             var main = ps.main;
             main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 1.4f);
             main.startSpeed = 0f;
@@ -400,12 +416,54 @@ namespace Game.Editor
             var shape = ps.shape;
             shape.enabled = true;
             shape.shapeType = ParticleSystemShapeType.Box;
-            shape.scale = new Vector3(80f, 0.35f, 80f);
+            shape.scale = new Vector3(size.x, 0.35f, size.y);
 
             var col = ps.colorOverLifetime;
             col.enabled = true;
             col.color = new ParticleSystem.MinMaxGradient(Blink(0f, 0.5f, 1f, 1f, 0f));
         }
+
+        /// <summary>Пылинки и пыльца в воздухе: еле заметные холодные точки медленно плывут — воздух «живой», есть объём.</summary>
+        private static void BuildMotes(Transform parent, Vector3 center, Vector2 size)
+        {
+            var mat = GetOrCreateMaterial("M_Mote", "Game/Soft Particle", m =>
+            {
+                SetAdditive(m);
+                m.SetColor("_Color", new Color(0.62f, 0.75f, 1f));
+                m.SetFloat("_Intensity", 2.2f);
+                m.SetFloat("_Softness", 2.4f);
+                m.SetFloat("_SoftFade", 0f);
+            });
+            if (mat == null) return;
+
+            var ps = NewParticles(parent, "AirMotes", center + new Vector3(0f, 2.5f, 0f), mat);
+            var main = ps.main;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(7f, 12f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.02f, 0.1f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.035f, 0.07f);
+            main.maxParticles = 600;
+
+            var em = ps.emission;
+            em.rateOverTime = Density(size, 35f, 55f);
+
+            var shape = ps.shape;
+            shape.enabled = true;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(size.x, 5f, size.y);
+            shape.randomDirectionAmount = 1f;
+
+            var noise = ps.noise;
+            noise.enabled = true;
+            noise.strength = 0.25f;
+            noise.frequency = 0.2f;
+            noise.scrollSpeed = 0.1f;
+
+            FadeInOut(ps, 0.2f, 0.75f);
+        }
+
+        /// <summary>Сколько частиц в секунду: на площади 80×80 — base, на маленькой — пропорционально меньше, но не меньше min.</summary>
+        private static float Density(Vector2 size, float basePer6400, float min) =>
+            Mathf.Max(min, basePer6400 * size.x * size.y / 6400f * 1.6f);
 
         /// <summary>Искры, улетающие вверх от костра.</summary>
         public static void BuildEmbers(Transform parent, Vector3 position)
