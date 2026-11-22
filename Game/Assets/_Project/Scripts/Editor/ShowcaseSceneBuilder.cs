@@ -377,10 +377,10 @@ namespace Game.Editor
                 m.shader = toon;
                 m.SetFloat("_UseVertexColors", 0f);
                 m.DisableKeyword("_VERTEX_COLORS");
-                m.SetColor("_ShadowColor", new Color(0.45f, 0.5f, 0.8f));
-                m.SetFloat("_AmbientStrength", 0.85f);
-                m.SetColor("_RimColor", ForestDetails.MoonRim);
-                m.SetFloat("_RimStrength", 0.3f);
+                m.SetColor("_ShadowColor", new Color(0.38f, 0.4f, 0.66f));
+                m.SetFloat("_AmbientStrength", 0.75f);
+                m.SetColor("_RimColor", new Color(1f, 0.72f, 0.48f));
+                m.SetFloat("_RimStrength", 0.25f);
                 m.SetFloat("_GradientHeight", 1.5f);
             }
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);

@@ -10,17 +10,17 @@ Shader "Game/Ground Toon"
     Properties
     {
         [Header(Soil)]
-        _DirtColor ("Soil A", Color) = (0.2, 0.24, 0.42, 1)
-        _DirtColor2 ("Soil B", Color) = (0.27, 0.31, 0.5, 1)
+        _DirtColor ("Soil A", Color) = (0.25, 0.21, 0.22, 1)
+        _DirtColor2 ("Soil B", Color) = (0.33, 0.27, 0.24, 1)
         _NoiseScale ("Patch scale (1/m)", Float) = 0.16
 
         [Header(Moss)]
-        _MossColor ("Moss A", Color) = (0.14, 0.34, 0.38, 1)
-        _MossColor2 ("Moss B", Color) = (0.22, 0.44, 0.4, 1)
+        _MossColor ("Moss A", Color) = (0.15, 0.25, 0.21, 1)
+        _MossColor2 ("Moss B", Color) = (0.24, 0.34, 0.24, 1)
         _MossAmount ("Moss amount", Range(0, 1)) = 0.5
 
         [Header(Path)]
-        _PathColor ("Path", Color) = (0.52, 0.44, 0.38, 1)
+        _PathColor ("Path", Color) = (0.45, 0.36, 0.27, 1)
         _PathAmp ("Path sway amplitude (m)", Float) = 3.5
         _PathFreq ("Path sway frequency", Float) = 0.055
         _PathOffsetX ("Path X offset", Float) = 0
@@ -36,11 +36,11 @@ Shader "Game/Ground Toon"
         _CrackColor ("Cracks", Color) = (0.12, 0.1, 0.12, 1)
 
         [Header(Toon lighting)]
-        _ShadowColor ("Shadow tint", Color) = (0.45, 0.5, 0.8, 1)
+        _ShadowColor ("Shadow tint", Color) = (0.38, 0.4, 0.66, 1)
         [IntRange] _Steps ("Light steps", Range(1, 5)) = 2
         _StepSmooth ("Step softness", Range(0.001, 0.5)) = 0.06
         _PointSmooth ("Point lights: 0 toon steps, 1 soft pools", Range(0, 1)) = 1
-        _AmbientStrength ("Ambient strength", Range(0, 1)) = 0.9
+        _AmbientStrength ("Ambient strength", Range(0, 1)) = 0.75
     }
 
     SubShader

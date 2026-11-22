@@ -151,18 +151,16 @@ namespace Game.Editor
             m.SetFloat("_PathZMax", ExitZ + 10f);
             if (created || AtmosphereBuilder.RefreshAssets)
             {
-                // ночь делает свет, а не краска: земля холодная, средней яркости и насыщенная (как у Shape of Dreams),
-                // тропа — тёплая и светлее, чтобы читалась дорога
-                m.SetColor("_DirtColor", new Color(0.2f, 0.24f, 0.42f));
-                m.SetColor("_DirtColor2", new Color(0.27f, 0.31f, 0.5f));
-                m.SetColor("_MossColor", new Color(0.14f, 0.34f, 0.38f));
-                m.SetColor("_MossColor2", new Color(0.22f, 0.44f, 0.4f));
-                m.SetColor("_PathColor", new Color(0.52f, 0.44f, 0.38f));
-                m.SetColor("_PebbleColor", new Color(0.5f, 0.52f, 0.64f));
-                m.SetColor("_LeafColor", new Color(0.68f, 0.4f, 0.24f));
-                m.SetColor("_CrackColor", new Color(0.1f, 0.1f, 0.2f));
-                m.SetColor("_ShadowColor", new Color(0.45f, 0.5f, 0.8f));
-                m.SetFloat("_AmbientStrength", 0.9f);
+                m.SetColor("_DirtColor", new Color(0.25f, 0.21f, 0.22f));
+                m.SetColor("_DirtColor2", new Color(0.33f, 0.27f, 0.24f));
+                m.SetColor("_MossColor", new Color(0.15f, 0.25f, 0.21f));
+                m.SetColor("_MossColor2", new Color(0.24f, 0.34f, 0.24f));
+                m.SetColor("_PathColor", new Color(0.45f, 0.36f, 0.27f));
+                m.SetColor("_PebbleColor", new Color(0.46f, 0.44f, 0.48f));
+                m.SetColor("_LeafColor", new Color(0.62f, 0.36f, 0.2f));
+                m.SetColor("_CrackColor", new Color(0.12f, 0.1f, 0.12f));
+                m.SetColor("_ShadowColor", new Color(0.38f, 0.4f, 0.66f));
+                m.SetFloat("_AmbientStrength", 0.75f);
             }
             m.SetFloat("_PebbleDensity", 0.12f); // крупные камешки — это модели в BuildGroundDetail, в шейдере только мелкая крошка
             m.SetFloat("_LeafDensity", 0.15f);
@@ -176,11 +174,11 @@ namespace Game.Editor
             root.SetParent(parent);
             var cliffMats = new[]
             {
-                ShowcaseSceneBuilder.Mat("CliffA", new Color(0.4f, 0.42f, 0.56f)),
-                ShowcaseSceneBuilder.Mat("CliffB", new Color(0.45f, 0.43f, 0.52f)),
+                ShowcaseSceneBuilder.Mat("CliffA", new Color(0.37f, 0.35f, 0.4f)),
+                ShowcaseSceneBuilder.Mat("CliffB", new Color(0.42f, 0.37f, 0.35f)),
             };
-            var strataMat = ShowcaseSceneBuilder.Mat("CliffStrata", new Color(0.28f, 0.29f, 0.42f));
-            var mossMat = ShowcaseSceneBuilder.Mat("CliffMoss", new Color(0.2f, 0.42f, 0.38f));
+            var strataMat = ShowcaseSceneBuilder.Mat("CliffStrata", new Color(0.27f, 0.25f, 0.3f));
+            var mossMat = ShowcaseSceneBuilder.Mat("CliffMoss", new Color(0.23f, 0.32f, 0.24f));
             var rockMat = ShowcaseSceneBuilder.Mat("CliffRock", new Color(0.33f, 0.32f, 0.36f));
             var treePrefabs = EnvironmentPrefabs.Load("Tree");
             var cone = ShowcaseSceneBuilder.ConeMesh();

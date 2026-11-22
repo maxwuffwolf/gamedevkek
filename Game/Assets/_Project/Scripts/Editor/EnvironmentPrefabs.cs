@@ -175,14 +175,13 @@ namespace Game.Editor
             mat.DisableKeyword("_VERTEX_COLORS");
             mat.SetFloat("_Variation", 0.07f);
             // сумеречные настройки: тени в фиолет, тёплый контровой обвод от низкого солнца
-            mat.SetColor("_ShadowColor", new Color(0.45f, 0.5f, 0.8f));
-            mat.SetColor("_GradientBottom", new Color(0.7f, 0.72f, 0.88f));
+            mat.SetColor("_ShadowColor", new Color(0.38f, 0.4f, 0.66f));
+            mat.SetColor("_GradientBottom", new Color(0.62f, 0.64f, 0.82f));
             mat.SetFloat("_GradientHeight", wind > 0f ? 3.5f : 1.5f);
-            // лунный контровой обвод: отделяет силуэты от земли (читаемость ночью)
-            mat.SetColor("_RimColor", ForestDetails.MoonRim);
-            mat.SetFloat("_RimStrength", 0.35f);
+            mat.SetColor("_RimColor", new Color(1f, 0.6f, 0.4f));
+            mat.SetFloat("_RimStrength", 0.25f);
             mat.SetFloat("_RimPower", 3f);
-            mat.SetFloat("_AmbientStrength", 0.85f);
+            mat.SetFloat("_AmbientStrength", 0.75f);
             mat.SetFloat("_WindStrength", wind);
             mat.SetFloat("_WindSpeed", 1.1f);
         }
