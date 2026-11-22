@@ -6,6 +6,7 @@ using Game.Gameplay.Items;
 using Game.Gameplay.Progression;
 using Game.Gameplay.Quests;
 using Game.Gameplay.World;
+using Game.Gameplay.Zones;
 using Game.Meta;
 using Game.UI;
 using UnityEngine;
@@ -15,6 +16,7 @@ namespace Game.App
     /// <summary>
     /// Авто-бутстрап: срабатывает при запуске ЛЮБОЙ сцены (Play в редакторе или билд).
     /// Загружает JSON-контент, поднимает сервисы, сейв, создаёт игрока на PlayerSpawnPoint, камеру и UI.
+    /// [Game], [UI] и игрок переживают смену сцены (DontDestroyOnLoad), см. Gameplay/Zones/ZoneService.
     /// Чтобы сцена запускалась без игры (меню и т.п.), положи на неё объект с компонентом NoAutoBoot.
     /// </summary>
     public sealed class GameRoot : MonoBehaviour
@@ -74,6 +76,11 @@ namespace Game.App
             if (_save.TryLoad(out var data)) _save.Apply(data);
             else _save.ApplyNewGame();
 
+            // --- зоны (переходы между сценами с экраном загрузки)
+            var zones = gameObject.AddComponent<ZoneService>();
+            Services.Register(zones);
+            zones.Init();
+
             // --- мир
             SpawnPlayer(charDef);
 
@@ -103,6 +110,8 @@ namespace Game.App
             }
 
             var player = ActorFactory.SpawnPlayer(charDef, GameWorld.SnapToGround(pos), rot);
+            // игрок живёт дольше сцены: при переходе в другую зону его не уничтожают, а переставляют на вход
+            DontDestroyOnLoad(player.gameObject);
             var pc = player.GetComponent<PlayerCharacter>();
             pc.RespawnPoint = player.transform.position;
             CameraRig.Create(player.transform);

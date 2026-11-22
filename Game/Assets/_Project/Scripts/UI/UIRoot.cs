@@ -1,5 +1,6 @@
 using Game.Core;
 using Game.Gameplay.Dialogue;
+using Game.Gameplay.Zones;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -51,6 +52,9 @@ namespace Game.UI
             root.Inventory = InventoryView.Create(root.Canvas);
             DeathView.Create(root.Canvas);
             TooltipView.Create(root.Canvas);
+            LoadingScreenView.Create(root.Canvas); // поверх всего
+
+            EventBus.Subscribe<ZoneLeavingEvent>(root.OnZoneLeaving);
 
             GameInput.RegisterPointerBlocker(IsPointerOverUi);
             return root;
@@ -84,8 +88,17 @@ namespace Game.UI
             }
         }
 
+        /// <summary>Перед сменой зоны закрываем окна: NPC из диалога сейчас исчезнет вместе со сценой.</summary>
+        private void OnZoneLeaving(ZoneLeavingEvent e)
+        {
+            var dialogue = Services.Get<DialogueService>();
+            if (dialogue.IsOpen) dialogue.Close();
+            if (Inventory.IsOpen) Inventory.Toggle(false);
+        }
+
         private void OnDestroy()
         {
+            EventBus.Unsubscribe<ZoneLeavingEvent>(OnZoneLeaving);
             GameInput.UnregisterPointerBlocker(IsPointerOverUi);
             if (Instance == this) Instance = null;
         }

@@ -362,4 +362,26 @@ namespace Game.Data
         public Dictionary<string, DialogueNodeDef> Nodes = new();
         string IContentDef.Id => Id;
     }
+
+    /// <summary>
+    /// Зона (локация) = одна сцена Unity. Переходы между зонами — ZonePortal на сцене, точки прибытия — ZoneEntrance.
+    /// </summary>
+    public sealed class ZoneDef : IContentDef
+    {
+        public string Id;
+        public string Name;
+        /// <summary>Строка под названием на экране загрузки.</summary>
+        public string Subtitle;
+        /// <summary>Имя файла сцены без .unity (сцена должна быть в Build Settings: Game → Зоны → Обновить список сцен).</summary>
+        public string Scene;
+        /// <summary>Рекомендуемый уровень (пока только для экрана загрузки).</summary>
+        public int Level = 1;
+        /// <summary>С этой зоны начинается игра: в билде её сцена идёт первой.</summary>
+        public bool Start;
+        /// <summary>Цвет фона экрана загрузки.</summary>
+        public string LoadingColor = "#0B0D16";
+        /// <summary>Подсказки на экране загрузки (показывается случайная).</summary>
+        public List<string> Tips = new();
+        string IContentDef.Id => Id;
+    }
 }

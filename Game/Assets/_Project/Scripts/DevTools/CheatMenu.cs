@@ -70,6 +70,15 @@ namespace Game.DevTools
             if (GUILayout.Button("Новая игра")) Run("save.wipe");
             GUILayout.EndHorizontal();
 
+            // --- зоны: кнопка на каждую зону из zones/*.json
+            if (db.Zones.Count > 0)
+            {
+                GUILayout.BeginHorizontal();
+                foreach (var z in db.Zones.Values)
+                    if (GUILayout.Button("→ " + (z.Name ?? z.Id))) Run($"zone {z.Id}");
+                GUILayout.EndHorizontal();
+            }
+
             GUILayout.Label($"Скорость времени: {Time.timeScale:0.0}");
             Time.timeScale = GUILayout.HorizontalSlider(Time.timeScale, 0.1f, 3f);
 

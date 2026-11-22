@@ -1,0 +1,40 @@
+{
+  "_comment": "Мобы оврага (стартовая зона). Падальщики — первые враги после падения героя.",
+  "monsters": [
+    {
+      "id": "scavenger", "name": "Падальщик", "prefab": "scavenger",
+      "ai": "melee_basic", "baseLevel": 1,
+      "stats": { "MaxHealth": 30, "Armor": 1, "MoveSpeed": 3.9, "PhysDamage": 4, "AttackSpeed": 1.1, "CritChance": 5, "CritMulti": 150 },
+      "scaling": { "MaxHealth": 0.15, "PhysDamage": 0.1 },
+      "skills": ["scavenger_slash"],
+      "aggroRange": 7, "leashRange": 16, "attackRange": 1.5, "wanderRadius": 3,
+      "xp": 9, "lootTable": "scavenger",
+      "tags": ["humanoid", "scavenger"],
+      "placeholder": { "model": "humanoid", "color": "#6E5A44", "accent": "#3A3128", "scale": 0.9 },
+      "corpseSeconds": 2.5
+    }
+  ],
+  "skills": [
+    {
+      "id": "scavenger_slash", "name": "Удар заточкой",
+      "behavior": "Melee", "cooldown": 1.1, "damageMultiplier": 1.0,
+      "shape": { "type": "Arc", "radius": 1.9, "angle": 100 },
+      "duration": 0.8, "hitFrame": 0.55, "usesAttackSpeed": true, "moveWhileCasting": 0,
+      "vfxColor": "#FFB060"
+    }
+  ],
+  "lootTables": [
+    {
+      "id": "scavenger",
+      "rolls": [1, 1],
+      "noDropWeight": 350,
+      "entries": [
+        { "type": "Currency", "id": "gold", "amount": [1, 5], "weight": 350 },
+        { "type": "ItemByTag", "tags": ["armor"], "weight": 150 },
+        { "type": "ItemByTag", "tags": ["weapon"], "weight": 90 },
+        { "type": "ItemByTag", "tags": ["jewelry"], "weight": 25 }
+      ],
+      "rarityWeights": { "common": 700, "uncommon": 240, "rare": 55, "epic": 5 }
+    }
+  ]
+}
