@@ -48,3 +48,5 @@ LightingData.asset filter=lfs diff=lfs merge=lfs -text
 
 # Палитры окружения крошечные (несколько КБ) и храним их в обычном git, без LFS
 **/T_Palette_*.png -filter -diff -merge binary
+# Шрифт интерфейса (Nunito, OFL): маленький, без LFS, чтобы приходил с PR из облака
+**/Resources/Fonts/Nunito-*.ttf -filter -diff -merge binary

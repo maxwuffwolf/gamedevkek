@@ -15,15 +15,15 @@ namespace Game.UI
 
         public static HoverInfoView Create(RectTransform canvas)
         {
-            var bg = UiKit.Image(canvas, "HoverInfo", new Color(0f, 0f, 0f, 0.7f));
+            var bg = UiKit.Panel(canvas, "HoverInfo", UiTheme.PanelSoft, UiTheme.RadiusPill, UiTheme.Line, false);
             var view = bg.gameObject.AddComponent<HoverInfoView>();
             view._rect = bg.rectTransform;
             view._bg = bg;
             view._canvas = canvas;
             view._rect.anchorMin = view._rect.anchorMax = new Vector2(0.5f, 0.5f);
             view._rect.pivot = new Vector2(0.5f, 0f);
-            view._text = UiKit.Text(bg.transform, "Text", "", 17, Color.white).Shadowed();
-            view._text.rectTransform.Stretch(8, 4, 8, 4);
+            view._text = UiKit.Text(bg.transform, "Text", "", 16, UiTheme.Text, TextAnchor.MiddleCenter, FontStyle.Bold);
+            view._text.rectTransform.Stretch(14, 4, 14, 4);
             return view;
         }
 
@@ -44,7 +44,7 @@ namespace Game.UI
             var settings = _text.GetGenerationSettings(new Vector2(400f, 0f));
             float h = _text.cachedTextGeneratorForLayout.GetPreferredHeight(_text.text, settings) / _text.pixelsPerUnit;
             float w = Mathf.Min(400f, _text.cachedTextGeneratorForLayout.GetPreferredWidth(_text.text, settings) / _text.pixelsPerUnit);
-            _rect.sizeDelta = new Vector2(w + 20f, h + 10f);
+            _rect.sizeDelta = new Vector2(w + 32f, h + 14f);
 
             Vector3 screen = cam.WorldToScreenPoint(target.InteractPosition + Vector3.up * 2.6f);
             RectTransformUtility.ScreenPointToLocalPointInRectangle(_canvas, screen, null, out var local);

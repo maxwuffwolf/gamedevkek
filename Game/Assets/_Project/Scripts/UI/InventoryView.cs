@@ -31,9 +31,8 @@ namespace Game.UI
 
         public static InventoryView Create(RectTransform canvas)
         {
-            var window = UiKit.Image(canvas, "Inventory", UiKit.PanelColor, true).rectTransform;
-            window.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(1010f, 640f));
-            UiKit.Frame(window, UiKit.FrameColor, 3f);
+            var window = UiKit.Panel(canvas, "Inventory", UiTheme.Panel, UiTheme.RadiusWindow, UiTheme.Line).rectTransform;
+            window.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(1010f, 660f));
             var view = window.gameObject.AddComponent<InventoryView>();
             view.Build(window);
             window.gameObject.SetActive(false);
@@ -49,28 +48,29 @@ namespace Game.UI
             _inventory.Changed += MarkDirty;
             _profile.Changed += MarkDirty;
 
-            var title = UiKit.Text(window, "Title", "Инвентарь", 26, UiKit.Gold, TextAnchor.MiddleCenter, FontStyle.Bold).Shadowed();
-            title.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -10f), new Vector2(400f, 34f));
-            var close = UiKit.Button(window, "Close", "×", () => Toggle(false), 24);
-            close.GetComponent<RectTransform>().Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-10f, -10f), new Vector2(36f, 36f));
+            var title = UiKit.Text(window, "Title", "Инвентарь", 28, UiTheme.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
+            title.rectTransform.Place(new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(28f, -16f), new Vector2(400f, 36f));
+            UiKit.CloseButton(window, () => Toggle(false));
 
             // ------------------------------------------------ экипировка
-            var equip = UiKit.Image(window, "Equipment", new Color(0f, 0f, 0f, 0.25f)).rectTransform;
-            equip.Place(new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(20f, -56f), new Vector2(400f, 560f));
-            UiKit.Frame(equip, new Color(0.35f, 0.3f, 0.22f), 1f);
-            var eqTitle = UiKit.Text(equip, "Title", "Снаряжение", 18, UiKit.TextColor, TextAnchor.MiddleCenter, FontStyle.Bold);
-            eqTitle.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -6f), new Vector2(300f, 24f));
+            var equip = UiKit.Panel(window, "Equipment", UiTheme.Inset, UiTheme.RadiusPanel, null, false).rectTransform;
+            equip.Place(new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(20f, -70f), new Vector2(400f, 570f));
+            var eqTitle = UiKit.Text(equip, "Title", "Снаряжение", 16, UiTheme.Dim, TextAnchor.MiddleCenter, FontStyle.Bold);
+            eqTitle.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -8f), new Vector2(300f, 24f));
 
             // силуэт героя по центру
-            var doll = UiKit.Image(equip, "Doll", new Color(0.12f, 0.11f, 0.1f, 0.9f)).rectTransform;
+            var doll = UiKit.Rect("Doll", equip);
             doll.Place(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(170f, 300f));
-            var head = UiKit.Image(doll, "SilHead", new Color(0.2f, 0.19f, 0.17f)).rectTransform;
-            head.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -30f), new Vector2(54f, 54f));
-            var torso = UiKit.Image(doll, "SilBody", new Color(0.2f, 0.19f, 0.17f)).rectTransform;
-            torso.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -92f), new Vector2(90f, 120f));
-            var legs = UiKit.Image(doll, "SilLegs", new Color(0.2f, 0.19f, 0.17f)).rectTransform;
-            legs.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -218f), new Vector2(70f, 70f));
-            _heroName = UiKit.Text(doll, "Name", "", 16, UiKit.TextColor, TextAnchor.LowerCenter);
+            var sil = new Color(0.07f, 0.08f, 0.12f, 0.85f);
+            var head = UiKit.Image(doll, "SilHead", sil).Round(UiTheme.RadiusPill).rectTransform;
+            head.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -24f), new Vector2(50f, 50f));
+            var torso = UiKit.Image(doll, "SilBody", sil).Round(28).rectTransform;
+            torso.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -82f), new Vector2(86f, 118f));
+            var legL = UiKit.Image(doll, "SilLegL", sil).Round(14).rectTransform;
+            legL.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(-20f, -204f), new Vector2(32f, 76f));
+            var legR = UiKit.Image(doll, "SilLegR", sil).Round(14).rectTransform;
+            legR.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(20f, -204f), new Vector2(32f, 76f));
+            _heroName = UiKit.Text(doll, "Name", "", 16, UiTheme.Text, TextAnchor.LowerCenter, FontStyle.Bold);
             _heroName.rectTransform.Stretch(4, 4, 4, 4);
 
             AddEquip(equip, EquipSlot.Head, "Голова", new Vector2(-140f, 150f));
@@ -87,25 +87,24 @@ namespace Game.UI
             AddEquip(equip, EquipSlot.OffHand, "Л. рука", new Vector2(120f, -190f));
 
             // ------------------------------------------------ рюкзак
-            var bag = UiKit.Image(window, "Backpack", new Color(0f, 0f, 0f, 0.25f)).rectTransform;
-            bag.Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-20f, -56f), new Vector2(560f, 560f));
-            UiKit.Frame(bag, new Color(0.35f, 0.3f, 0.22f), 1f);
-            var bagTitle = UiKit.Text(bag, "Title", "Рюкзак", 18, UiKit.TextColor, TextAnchor.MiddleCenter, FontStyle.Bold);
-            bagTitle.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -6f), new Vector2(300f, 24f));
-            _capacity = UiKit.Text(bag, "Capacity", "", 14, UiKit.DimText, TextAnchor.MiddleRight);
-            _capacity.rectTransform.Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-10f, -6f), new Vector2(200f, 24f));
+            var bag = UiKit.Rect("Backpack", window);
+            bag.Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-20f, -70f), new Vector2(560f, 570f));
+            var bagTitle = UiKit.Text(bag, "Title", "Рюкзак", 16, UiTheme.Dim, TextAnchor.MiddleLeft, FontStyle.Bold);
+            bagTitle.rectTransform.Place(new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(4f, -8f), new Vector2(300f, 24f));
+            _capacity = UiKit.Text(bag, "Capacity", "", 14, UiTheme.Dim, TextAnchor.MiddleRight);
+            _capacity.rectTransform.Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-4f, -8f), new Vector2(300f, 24f));
 
             _backpackGrid = UiKit.Rect("Grid", bag);
             _backpackGrid.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -36f), new Vector2(Columns * Cell + (Columns - 1) * Gap, 340f));
             BuildBackpackSlots();
 
-            _stats = UiKit.Text(bag, "Stats", "", 15, UiKit.TextColor, TextAnchor.UpperLeft);
-            _stats.rectTransform.Place(new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(16f, 12f), new Vector2(380f, 160f));
-            _gold = UiKit.Text(bag, "Gold", "", 18, UiKit.Gold, TextAnchor.LowerRight, FontStyle.Bold).Shadowed();
-            _gold.rectTransform.Place(new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-16f, 12f), new Vector2(200f, 30f));
+            _stats = UiKit.Text(bag, "Stats", "", 15, UiTheme.Text, TextAnchor.UpperLeft);
+            _stats.rectTransform.Place(new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(4f, 12f), new Vector2(320f, 170f));
+            _gold = UiKit.Text(window, "Gold", "", 20, UiTheme.Gold, TextAnchor.MiddleRight, FontStyle.Bold);
+            _gold.rectTransform.Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-64f, -16f), new Vector2(240f, 36f));
             var help = UiKit.Text(bag, "Help", "ПКМ — надеть/снять\nПеретаскивай предметы\nЗакрытые ячейки открываются\nнаградами за задания",
-                12, UiKit.DimText, TextAnchor.LowerRight);
-            help.rectTransform.Place(new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-16f, 48f), new Vector2(220f, 80f));
+                12, UiTheme.Dim, TextAnchor.LowerRight);
+            help.rectTransform.Place(new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-4f, 12f), new Vector2(220f, 80f));
         }
 
         private void BuildBackpackSlots()
@@ -228,7 +227,8 @@ namespace Game.UI
             var p = GameWorld.Player;
             if (p == null) return "";
             var sb = new StringBuilder();
-            void Line(string name, string value) => sb.AppendLine($"<color=#9a9080>{name}:</color> {value}");
+            const string dim = "#a7a39b"; // UiTheme.Dim без прозрачности
+            void Line(string name, string value) => sb.AppendLine($"<color={dim}>{name}</color>   {value}");
             Line("Здоровье", $"{p.MaxHealth:0}");
             Line("Мана", $"{p.MaxMana:0}");
             Line("Урон", $"{p.Stats.Get(StatId.PhysDamage):0.#}");

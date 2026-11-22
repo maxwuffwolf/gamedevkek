@@ -13,11 +13,11 @@ namespace Game.UI
 
         public static DeathView Create(RectTransform canvas)
         {
-            var shade = UiKit.Image(canvas, "Death", new Color(0.25f, 0f, 0f, 0.45f));
+            var shade = UiKit.Image(canvas, "Death", new Color(0.06f, 0.03f, 0.06f, 0.6f));
             shade.rectTransform.Stretch();
             var view = shade.gameObject.AddComponent<DeathView>();
             view._shade = shade;
-            view._text = UiKit.Text(shade.transform, "Text", "", 44, new Color(1f, 0.35f, 0.3f), TextAnchor.MiddleCenter, FontStyle.Bold).Shadowed();
+            view._text = UiKit.Text(shade.transform, "Text", "", 44, UiTheme.Text, TextAnchor.MiddleCenter, FontStyle.Bold).Shadowed();
             view._text.rectTransform.Stretch();
             return view;
         }

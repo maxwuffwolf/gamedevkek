@@ -37,8 +37,7 @@ namespace Game.UI
 
         public static ContainerView Create(RectTransform canvas, InventoryView inventory)
         {
-            var window = UiKit.Image(canvas, "Container", UiKit.PanelColor, true).rectTransform;
-            UiKit.Frame(window, UiKit.FrameColor, 3f);
+            var window = UiKit.Panel(canvas, "Container", UiTheme.Panel, UiTheme.RadiusWindow, UiTheme.Line).rectTransform;
             var view = window.gameObject.AddComponent<ContainerView>();
             view._window = window;
             view._inventory = inventory;
@@ -54,20 +53,19 @@ namespace Game.UI
             _visuals = Services.Get<VisualRegistry>();
             _service = Services.Get<ContainerService>();
 
-            _title = UiKit.Text(_window, "Title", "", 22, UiKit.Gold, TextAnchor.MiddleCenter, FontStyle.Bold).Shadowed();
-            _title.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -10f), new Vector2(Width - 70f, 30f));
-            var close = UiKit.Button(_window, "Close", "×", () => _service.Close(), 24);
-            close.GetComponent<RectTransform>().Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-8f, -8f), new Vector2(34f, 34f));
+            _title = UiKit.Text(_window, "Title", "", 22, UiTheme.Text, TextAnchor.MiddleLeft, FontStyle.Bold);
+            _title.rectTransform.Place(new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(20f, -14f), new Vector2(Width - 70f, 30f));
+            UiKit.CloseButton(_window, () => _service.Close());
 
-            _description = UiKit.Text(_window, "Description", "", 14, UiKit.DimText, TextAnchor.UpperLeft, FontStyle.Italic);
-            _description.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -46f), new Vector2(Width - 40f, 40f));
+            _description = UiKit.Text(_window, "Description", "", 14, UiTheme.Dim, TextAnchor.UpperLeft);
+            _description.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -50f), new Vector2(Width - 40f, 40f));
 
             _grid = UiKit.Rect("Grid", _window);
 
-            _takeAll = UiKit.Button(_window, "TakeAll", "Взять всё", OnTakeAll, 17);
-            _takeAll.GetComponent<RectTransform>().Place(new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 34f), new Vector2(150f, 34f));
-            _hint = UiKit.Text(_window, "Hint", "", 12, UiKit.DimText, TextAnchor.MiddleCenter);
-            _hint.rectTransform.Place(new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 8f), new Vector2(Width - 20f, 22f));
+            _takeAll = UiKit.Button(_window, "TakeAll", "Взять всё", OnTakeAll, 16, primary: true);
+            _takeAll.GetComponent<RectTransform>().Place(new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(20f, 38f), new Vector2(140f, 36f));
+            _hint = UiKit.Text(_window, "Hint", "", 12, UiTheme.Dim, TextAnchor.MiddleLeft);
+            _hint.rectTransform.Place(new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(20f, 10f), new Vector2(Width - 40f, 22f));
 
             EventBus.Subscribe<ContainerOpenedEvent>(OnOpened);
             EventBus.Subscribe<ContainerClosedEvent>(OnClosed);
@@ -124,8 +122,8 @@ namespace Game.UI
         {
             int rows = Mathf.Max(1, Mathf.CeilToInt(slotCount / (float)Columns));
             float gridH = rows * Cell + (rows - 1) * Gap;
-            float top = hasDescription ? 96f : 52f;
-            float height = top + gridH + 84f;
+            float top = hasDescription ? 100f : 58f;
+            float height = top + gridH + 94f;
             _window.Place(new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(60f, 40f), new Vector2(Width, height));
             _grid.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -top), new Vector2(Width - 40f, gridH));
         }
