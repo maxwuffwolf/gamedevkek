@@ -147,6 +147,8 @@ namespace Game.Editor
             m.SetFloat("_PathWidth", 1.5f);
             m.SetFloat("_PathZMin", CraterZ + 4f);
             m.SetFloat("_PathZMax", ExitZ + 10f);
+            m.SetFloat("_PebbleDensity", 0.12f); // крупные камешки — это модели в BuildGroundDetail, в шейдере только мелкая крошка
+            m.SetFloat("_LeafDensity", 0.15f);
             EditorUtility.SetDirty(m);
             return m;
         }

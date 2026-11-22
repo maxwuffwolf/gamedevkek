@@ -30,9 +30,9 @@ Shader "Game/Ground Toon"
 
         [Header(Details)]
         _PebbleColor ("Pebbles", Color) = (0.46, 0.44, 0.48, 1)
-        _PebbleDensity ("Pebble density", Range(0, 1)) = 0.35
+        _PebbleDensity ("Pebble density", Range(0, 1)) = 0.12
         _LeafColor ("Leaf litter", Color) = (0.62, 0.36, 0.2, 1)
-        _LeafDensity ("Leaf density", Range(0, 1)) = 0.25
+        _LeafDensity ("Leaf density", Range(0, 1)) = 0.15
         _CrackColor ("Cracks", Color) = (0.12, 0.1, 0.12, 1)
 
         [Header(Toon lighting)]
@@ -222,17 +222,19 @@ Shader "Game/Ground Toon"
                 float crack = (1.0 - smoothstep(0.0, 0.05, cr.z - cr.x)) * smoothstep(0.5, 0.65, mid) * (1.0 - moss) * (1.0 - pathMask * 0.6) * 0.55;
                 c = lerp(c, _CrackColor.rgb, crack);
 
-                // камешки: круглые пятна в клетках, с тёмной «тенью» снизу
-                float3 pc = Cells(p * 2.6);
+                // камешки: неровные пятна (координаты «плывут» шумом, чтобы не было идеальных кругов), с тёмной каймой
+                float2 warp = float2(ValueNoise(p * 3.1), ValueNoise(p * 3.1 + 7.7)) - 0.5;
+                float3 pc = Cells(p * 2.6 + warp * 0.9);
                 float pebbleOn = step(1.0 - _PebbleDensity, pc.y) * (1.0 - moss * 0.7);
-                float r = 0.12 + 0.12 * frac(pc.y * 7.3);
+                float r = 0.07 + 0.08 * frac(pc.y * 7.3);
                 float pebble = (1.0 - smoothstep(r - 0.04, r, pc.x)) * pebbleOn;
                 float rim = (1.0 - smoothstep(r, r + 0.06, pc.x)) * pebbleOn - pebble;
                 c = lerp(c, c * 0.55, saturate(rim) * 0.7);
                 c = lerp(c, _PebbleColor.rgb * (0.8 + 0.4 * frac(pc.y * 13.1)), pebble);
 
                 // сухие листья: мелкие тёплые крапинки, больше по краям тропы
-                float3 lc = Cells(p * 5.0 + 2.3);
+                float2 warp2 = float2(ValueNoise(p * 6.3 + 3.0), ValueNoise(p * 6.3 + 11.0)) - 0.5;
+                float3 lc = Cells(float2(p.x * 5.0, p.y * 3.2) + warp2 * 1.1 + 2.3); // вытянутые и рваные, как листья
                 float leafOn = step(1.0 - _LeafDensity * (0.6 + 0.8 * (1.0 - pathMask)), lc.y);
                 float leaf = (1.0 - smoothstep(0.08, 0.13, lc.x)) * leafOn;
                 c = lerp(c, _LeafColor.rgb * (0.7 + 0.5 * frac(lc.y * 5.7)), leaf * 0.85);
