@@ -21,6 +21,8 @@ namespace Game.Editor
         private const float ZMax = 46f;
         private const float CraterZ = -34f;
         private const float SkeletonZ = -22f;
+        /// <summary>Скелет между тропой и левой стеной — на открытом месте, не в камнях у обрыва.</summary>
+        private static Vector3 SkeletonPos => Floor(SkeletonZ, -0.45f);
         private const float ExitZ = 42f;
 
         private static System.Random _rng;
@@ -234,7 +236,7 @@ namespace Game.Editor
         }
 
         /// <summary>Где воткнут меч относительно скелета (локально, метры). Совпадает с SWORD_POS в Tools/Blender/ravine_props.py.</summary>
-        private static readonly Vector3 SwordLocal = new(-0.62f, 0f, 0.36f);
+        private static readonly Vector3 SwordLocal = new(-0.8f, 0f, 0.5f);
 
         /// <summary>
         /// Павший солдат у стены (модель Prop_Skeleton_Soldier.fbx из Tools/Blender/ravine_props.py, без неё — заглушка
@@ -242,11 +244,12 @@ namespace Game.Editor
         /// </summary>
         private static void BuildSkeleton(Transform parent, Transform gameplay)
         {
-            Vector3 basePos = Floor(SkeletonZ, -0.78f);
             var root = new GameObject("Skeleton_Soldier").transform;
             root.SetParent(parent);
-            root.position = basePos;
-            root.rotation = Quaternion.Euler(0f, 90f, 0f); // сидит спиной к левой стене, лицом в ущелье
+            root.position = SkeletonPos;
+            // сидит спиной к валуну на открытом месте у тропы, лицом на юг — к кратеру и к камере,
+            // чтобы игрок видел его спереди, а меч не терялся среди камней у стены
+            root.rotation = Quaternion.Euler(0f, 180f, 0f);
 
             var model = PropModels.Load(PropModels.SkeletonSoldierFbx);
             if (model != null)
@@ -262,8 +265,19 @@ namespace Game.Editor
             }
             // твёрдый коллайдер, чтобы герой не проходил сквозь скелет и щит
             var body = root.gameObject.AddComponent<BoxCollider>();
-            body.center = new Vector3(0.1f, 0.4f, 0.05f);
-            body.size = new Vector3(1.1f, 0.8f, 0.9f);
+            body.center = new Vector3(0f, 0.45f, -0.45f); // скелет + валун за спиной (он в той же модели)
+            body.size = new Vector3(2.1f, 0.9f, 1.6f);
+
+            // мягкий холодный свет сверху: в сумерках солдат должен читаться силуэтом
+            var lightGo = new GameObject("SoldierLight");
+            lightGo.transform.SetParent(root, false);
+            lightGo.transform.localPosition = new Vector3(-0.2f, 2.4f, 1.3f);
+            var l = lightGo.AddComponent<Light>();
+            l.type = LightType.Point;
+            l.color = new Color(0.78f, 0.84f, 1f);
+            l.range = 5f;
+            l.intensity = 2f;
+            l.shadows = LightShadows.None;
 
             BuildRustySword(gameplay, root);
         }
@@ -324,8 +338,8 @@ namespace Game.Editor
             var l = lightGo.AddComponent<Light>();
             l.type = LightType.Point;
             l.color = new Color(0.7f, 0.8f, 1f);
-            l.range = 4f;
-            l.intensity = 1.6f;
+            l.range = 3.5f;
+            l.intensity = 2.6f;
             l.shadows = LightShadows.None;
         }
 
@@ -365,7 +379,7 @@ namespace Game.Editor
                 if (Vector3.Distance(p, Floor(CraterZ)) < 7.5f) return true;          // кратер
                 if (Mathf.Abs(across) < 0.25f) return true;                         // тропа
                 if (p.z > ExitZ - 6f && Mathf.Abs(across) < 0.6f) return true;      // перед аркой
-                if (Mathf.Abs(p.z - SkeletonZ) < 2.5f && across < -0.5f) return true; // скелет
+                if (Vector3.Distance(p, SkeletonPos) < 3f) return true;            // скелет и меч
                 return false;
             }
 

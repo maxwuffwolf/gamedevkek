@@ -44,7 +44,7 @@ MAT_2S = "M_Prop_Ravine_2S"
 
 # Где воткнут меч относительно скелета (Blender, метры). RavineSceneBuilder ставит меч туда же:
 # в Unity это локальные (-SWORD_POS.x, 0, -SWORD_POS.y).
-SWORD_POS = Vector((0.62, -0.36, 0.0))
+SWORD_POS = Vector((0.8, -0.5, 0.0))
 SWORD_TILT = (14.0, -9.0)  # наклон к стене/вбок, градусы
 
 
@@ -444,8 +444,8 @@ def build_arrows(rng):
 
 def build_shield(rng):
     """Круглый щит, прислонён к стене слева, кусок откушен."""
-    center = Vector((-0.5, 0.22, 0.31))
-    rot = look_rot(Vector((0.35, -1.0, 0.45)), up=(0, 0, 1))  # лицо щита наружу и вверх
+    center = Vector((-0.56, 0.3, 0.29))
+    rot = look_rot(Vector((0.3, -1.0, 0.6)), up=(0, 0, 1))  # лицо щита наружу и вверх
     loc = lambda v: center + rot @ Vector(v)  # noqa: E731
     R = 0.26
 
@@ -492,9 +492,36 @@ def build_shield(rng):
     return part("shield", geo, col, MAT)
 
 
+STONE = (0.44, 0.44, 0.5)
+STONE_DARK = (0.26, 0.26, 0.31)
+
+
+def build_boulder(rng):
+    """Валун, к которому солдат привалился спиной (+ камень поменьше справа). Часть модели, чтобы спина
+    точно лежала на камне, а щит опирался на него, — в любой сцене, без подгонки руками."""
+    def rock(bm, center, scale, seed):
+        def deform(co):
+            d = co.normalized()
+            k = 1.0 + 0.16 * (n01(d, 2.3, (seed, 0, 0)) - 0.5) * 2 + 0.06 * (n01(d, 6.0, (0, seed, 0)) - 0.5) * 2
+            return co * k
+        ico(bm, center, 1.0, scale=scale, subdiv=2, deform=deform)
+
+    def geo(bm):
+        rock(bm, (-0.05, 0.9, 0.18), (1.0, 0.58, 0.72), 1.0)
+        rock(bm, (0.78, 0.62, 0.05), (0.36, 0.3, 0.28), 4.0)
+        rock(bm, (-0.95, 0.55, 0.02), (0.25, 0.22, 0.18), 7.0)
+
+    def col(c, nrm, p):
+        col = lerp3(STONE, STONE_DARK, 0.2 + 0.55 * n01(c, 4.0, (2, 0, 0)))
+        col = lerp3(col, STONE_DARK, 0.5 * smooth(0.25, -0.4, nrm.z))
+        col = lerp3(col, SOOT, 0.4 * smooth(0.25, 0.0, c.z))
+        return mossy(col, c, nrm, 0.9, 31.0)
+    return part("boulder", geo, col, MAT)
+
+
 def build_soldier(rng):
     objs = [build_skull(rng), build_limbs(rng), build_mail(rng), build_plate(rng), build_helmet(rng),
-            build_tabard(rng), build_boots(rng), build_cloak(rng), build_arrows(rng), build_shield(rng)]
+            build_tabard(rng), build_boots(rng), build_arrows(rng), build_shield(rng), build_boulder(rng)]
     return join(objs, "Prop_Skeleton_Soldier")
 
 
@@ -580,10 +607,6 @@ def render_preview(path, soldier, sword):
     gm.use_nodes = True
     gm.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.1, 0.09, 0.085, 1)
     ground.data.materials.append(gm)
-    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0.9, 1.0))
-    wall = bpy.context.active_object
-    wall.scale = (5, 1, 2)
-    wall.data.materials.append(gm)
 
     # крупный план меча справа
     big = sword.copy()
@@ -594,9 +617,10 @@ def render_preview(path, soldier, sword):
     cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
     sc.collection.objects.link(cam)
     sc.camera = cam
-    cam.location = (0.55, -3.1, 1.75)
-    cam.rotation_euler = (math.radians(64), 0, math.radians(4))
-    cam.data.lens = 38
+    # как игровая камера: сверху-спереди под 55°
+    cam.location = (0.55, -2.55, 3.25)
+    cam.rotation_euler = (math.radians(37), 0, math.radians(2))
+    cam.data.lens = 34
     key = bpy.data.objects.new("key", bpy.data.lights.new("key", "SUN"))
     key.data.energy = 3.2
     key.rotation_euler = (math.radians(50), 0, math.radians(-30))
