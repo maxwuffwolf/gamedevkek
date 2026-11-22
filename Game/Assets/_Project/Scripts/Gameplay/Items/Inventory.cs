@@ -75,6 +75,22 @@ namespace Game.Gameplay.Items
             return false;
         }
 
+        /// <summary>Положить в конкретную ячейку (должна быть открыта и пуста).</summary>
+        public bool TryPlace(int index, ItemInstance item)
+        {
+            if (item == null || !IsUnlocked(index) || _backpack[index] != null) return false;
+            _backpack[index] = item;
+            Notify();
+            return true;
+        }
+
+        /// <summary>Индекс первой свободной открытой ячейки или -1.</summary>
+        public int FirstFree()
+        {
+            for (int i = 0; i < Unlocked; i++) if (_backpack[i] == null) return i;
+            return -1;
+        }
+
         public void UnlockSlots(int count)
         {
             Unlocked = Math.Clamp(Unlocked + count, 0, _backpack.Length);

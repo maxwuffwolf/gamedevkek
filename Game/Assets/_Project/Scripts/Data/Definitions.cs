@@ -384,4 +384,59 @@ namespace Game.Data
         public List<string> Tips = new();
         string IContentDef.Id => Id;
     }
+
+    // ------------------------------------------------------------------ контейнеры (сундуки, трупы, тайники)
+
+    /// <summary>Что делать с объектом в мире, когда контейнер опустел.</summary>
+    public enum ContainerEmptyMode
+    {
+        /// <summary>Остаётся, его можно открыть пустым и положить что-то внутрь (сундук).</summary>
+        Keep,
+        /// <summary>Перестаёт подсвечиваться и кликаться, модель остаётся (обысканный труп).</summary>
+        Disable,
+        /// <summary>Модель прячется (меч забрали — его больше нет в земле).</summary>
+        Hide,
+    }
+
+    /// <summary>Гарантированный предмет в контейнере.</summary>
+    public sealed class ContainerItemDef
+    {
+        public string Id;
+        public string Rarity = "common";
+        public IntRange Amount = new(1);
+        /// <summary>Шанс 0..1, что предмет вообще будет.</summary>
+        public float Chance = 1f;
+    }
+
+    /// <summary>
+    /// Шаблон контейнера: в сцене ставится WorldContainer с этим id, содержимое генерируется
+    /// при первом открытии (items + бросок lootTable + золото) и дальше хранится в сейве.
+    /// </summary>
+    public sealed class ContainerDef : IContentDef
+    {
+        public string Id;
+        /// <summary>Имя при наведении («Ржавый меч», «Старый сундук»).</summary>
+        public string Name;
+        /// <summary>Заголовок окна (по умолчанию = Name).</summary>
+        public string Title;
+        /// <summary>Подсказка действия: «Осмотреть», «Открыть».</summary>
+        public string Action = "Открыть";
+        /// <summary>Строка-описание в окне (лор, подсказка).</summary>
+        public string Description;
+        /// <summary>Сколько ячеек в окне.</summary>
+        public int Slots = 8;
+        public List<ContainerItemDef> Items = new();
+        /// <summary>Лут-таблица (необязательно) — бросается вдобавок к items.</summary>
+        public string LootTable;
+        /// <summary>Уровень предметов для лут-таблицы. 0 = уровень зоны.</summary>
+        public int ItemLevel;
+        public IntRange Gold = new(0);
+        public ContainerEmptyMode WhenEmpty = ContainerEmptyMode.Keep;
+        /// <summary>false = содержимое не сохраняется и генерируется заново при каждом заходе в зону.</summary>
+        public bool Persistent = true;
+        /// <summary>Можно ли класть свои вещи (сундук-хранилище). Для трупов обычно false.</summary>
+        public bool AllowPut;
+
+        string IContentDef.Id => Id;
+    }
 }

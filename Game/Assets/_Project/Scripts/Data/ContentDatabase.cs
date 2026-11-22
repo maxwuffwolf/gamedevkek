@@ -35,6 +35,7 @@ namespace Game.Data
             public readonly Dictionary<string, QuestDef> Quests = new();
             public readonly Dictionary<string, DialogueDef> Dialogues = new();
             public readonly Dictionary<string, ZoneDef> Zones = new();
+            public readonly Dictionary<string, ContainerDef> Containers = new();
         }
 
         private ContentSet _set = new();
@@ -56,6 +57,7 @@ namespace Game.Data
         public IReadOnlyDictionary<string, QuestDef> Quests => _set.Quests;
         public IReadOnlyDictionary<string, DialogueDef> Dialogues => _set.Dialogues;
         public IReadOnlyDictionary<string, ZoneDef> Zones => _set.Zones;
+        public IReadOnlyDictionary<string, ContainerDef> Containers => _set.Containers;
 
         /// <summary>Редкости по возрастанию ценности.</summary>
         public IReadOnlyList<RarityDef> RaritiesOrdered { get; private set; } = Array.Empty<RarityDef>();
@@ -85,6 +87,7 @@ namespace Game.Data
         public DialogueDef Dialogue(string id) => Get(Dialogues, id);
         public LootTableDef LootTable(string id) => Get(LootTables, id);
         public ZoneDef Zone(string id) => Get(Zones, id);
+        public ContainerDef Container(string id) => Get(Containers, id);
 
         /// <summary>Зона, которой принадлежит сцена (по имени сцены), или null.</summary>
         public ZoneDef ZoneByScene(string sceneName) =>
@@ -98,7 +101,7 @@ namespace Game.Data
         /// <summary>Все id (для автодополнения в консоли).</summary>
         public IEnumerable<string> AllIds() =>
             _set.Items.Keys.Concat(_set.Monsters.Keys).Concat(_set.Skills.Keys).Concat(_set.Quests.Keys)
-                .Concat(_set.LootTables.Keys).Concat(_set.Rarities.Keys).Concat(_set.Npcs.Keys).Concat(_set.Zones.Keys);
+                .Concat(_set.LootTables.Keys).Concat(_set.Rarities.Keys).Concat(_set.Npcs.Keys).Concat(_set.Zones.Keys).Concat(_set.Containers.Keys);
 
         /// <summary>
         /// Загрузить всё. Если есть ошибки парсинга, а данные уже были загружены, старые данные остаются
@@ -143,6 +146,7 @@ namespace Game.Data
                             case "quests": LoadList(prop.Value, fresh.Quests, rel); break;
                             case "dialogues": LoadList(prop.Value, fresh.Dialogues, rel); break;
                             case "zones": LoadList(prop.Value, fresh.Zones, rel); break;
+                            case "containers": LoadList(prop.Value, fresh.Containers, rel); break;
                             default:
                                 Warnings.Add($"{rel}: неизвестный раздел \"{prop.Name}\" (пропущен)");
                                 break;
@@ -288,6 +292,17 @@ namespace Game.Data
 
             foreach (var z in Zones.Values)
                 if (string.IsNullOrWhiteSpace(z.Scene)) Errors.Add($"zone {z.Id}: не указана сцена (scene)");
+            foreach (var c in Containers.Values)
+            {
+                Need(LootTables, c.LootTable, $"container {c.Id}");
+                foreach (var it in c.Items)
+                {
+                    Need(Items, it.Id, $"container {c.Id}.items");
+                    Need(Rarities, it.Rarity, $"container {c.Id}.items");
+                }
+                if (c.Slots < 1) Errors.Add($"container {c.Id}: slots должно быть >= 1");
+            }
+
             int starts = Zones.Values.Count(z => z.Start);
             if (Zones.Count > 0 && starts != 1) Warnings.Add($"Зон со \"start\": true — {starts}, должна быть ровно одна");
 

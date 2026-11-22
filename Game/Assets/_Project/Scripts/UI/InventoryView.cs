@@ -164,6 +164,8 @@ namespace Game.UI
         private void OnRightClick(ItemSlotView slot)
         {
             string error;
+            // открыт сундук с allowPut — ПКМ по вещи в рюкзаке кладёт её туда
+            if (!slot.IsEquipment && ContainerView.Instance != null && ContainerView.Instance.TryPutFromBackpack(slot.BackpackIndex)) return;
             if (slot.IsEquipment) _inventory.Unequip(slot.EquipSlot, out error);
             else if (_inventory.GetBackpack(slot.BackpackIndex) != null) _inventory.Equip(slot.BackpackIndex, out error);
             else return;
@@ -173,6 +175,11 @@ namespace Game.UI
         private void OnDrop(ItemSlotView from, ItemSlotView to)
         {
             string error = null;
+            if (from.IsContainer)
+            {
+                ContainerView.Instance?.TakeInto(from, to);
+                return;
+            }
             if (!from.IsEquipment && !to.IsEquipment) _inventory.Move(from.BackpackIndex, to.BackpackIndex);
             else if (!from.IsEquipment && to.IsEquipment) _inventory.Equip(from.BackpackIndex, out error, to.EquipSlot);
             else if (from.IsEquipment && !to.IsEquipment) _inventory.Unequip(from.EquipSlot, out error, to.BackpackIndex);

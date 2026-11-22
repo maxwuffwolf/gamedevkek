@@ -9,7 +9,8 @@ namespace Game.Editor
     /// <summary>
     /// Генерирует стартовую зону «Овраг Упавшей звезды» (зона "ravine" в zones.json, сцена Ravine):
     /// извилистое ущелье с юга на север. На юге — дымящийся кратер, куда упал герой (тут PlayerSpawn),
-    /// дальше скелет с ржавым мечом, падальщики, на севере — арка-переход в Сумеречный лес.
+    /// дальше павший солдат с ржавым мечом (меч — контейнер, его забирают через окно), падальщики,
+    /// на севере — арка-переход в Сумеречный лес.
     /// Меню: Game → Зоны → Пересобрать сцену Овраг. Сцену потом можно спокойно править руками.
     /// </summary>
     public static class RavineSceneBuilder
@@ -51,7 +52,6 @@ namespace Game.Editor
             BuildFloor(env);
             BuildCliffs(env);
             BuildCrater(env);
-            BuildSkeleton(env);
             BuildDebris(env);
             BuildGlowShrooms(env);
             AtmosphereBuilder.BuildEffects(env, _rng);
@@ -61,6 +61,8 @@ namespace Game.Editor
             spawn.SetParent(gameplay);
             spawn.position = Floor(CraterZ);
             spawn.rotation = Quaternion.identity; // лицом на север, к выходу
+
+            BuildSkeleton(env, gameplay); // павший солдат и ржавый меч-контейнер
 
             AddSpawner(gameplay, "Spawner_Scavengers_Skeleton", Floor(SkeletonZ + 6f, 0.2f), 2, 2.5f, new Vector2Int(1, 1), 45f);
             AddSpawner(gameplay, "Spawner_Scavengers_Mid", Floor(6f, -0.2f), 3, 4f, new Vector2Int(1, 2), 45f);
@@ -231,18 +233,106 @@ namespace Game.Editor
             AtmosphereBuilder.BuildEmbers(root, c + Vector3.up * 0.2f);
         }
 
-        /// <summary>Скелет у стены и воткнутый рядом ржавый меч (этап 2: сделать меч подбираемым).</summary>
-        private static void BuildSkeleton(Transform parent)
+        /// <summary>Где воткнут меч относительно скелета (локально, метры). Совпадает с SWORD_POS в Tools/Blender/ravine_props.py.</summary>
+        private static readonly Vector3 SwordLocal = new(-0.62f, 0f, 0.36f);
+
+        /// <summary>
+        /// Павший солдат у стены (модель Prop_Skeleton_Soldier.fbx из Tools/Blender/ravine_props.py, без неё — заглушка
+        /// из примитивов) и воткнутый рядом ржавый меч — контейнер "ravine_rusty_sword" (клик → окно → взять меч).
+        /// </summary>
+        private static void BuildSkeleton(Transform parent, Transform gameplay)
         {
             Vector3 basePos = Floor(SkeletonZ, -0.78f);
-            var root = new GameObject("Skeleton_RustySword").transform;
+            var root = new GameObject("Skeleton_Soldier").transform;
             root.SetParent(parent);
             root.position = basePos;
             root.rotation = Quaternion.Euler(0f, 90f, 0f); // сидит спиной к левой стене, лицом в ущелье
 
+            var model = PropModels.Load(PropModels.SkeletonSoldierFbx);
+            if (model != null)
+            {
+                var inst = (GameObject)PrefabUtility.InstantiatePrefab(model, root);
+                inst.transform.localPosition = Vector3.zero;
+                inst.transform.localRotation = Quaternion.identity;
+                foreach (var r in inst.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+            }
+            else
+            {
+                BuildSkeletonPlaceholder(root);
+            }
+            // твёрдый коллайдер, чтобы герой не проходил сквозь скелет и щит
+            var body = root.gameObject.AddComponent<BoxCollider>();
+            body.center = new Vector3(0.1f, 0.4f, 0.05f);
+            body.size = new Vector3(1.1f, 0.8f, 0.9f);
+
+            BuildRustySword(gameplay, root);
+        }
+
+        /// <summary>Меч в земле = контейнер. Пропадает целиком, когда меч забрали (whenEmpty: Hide в containers.json).</summary>
+        private static void BuildRustySword(Transform gameplay, Transform skeleton)
+        {
+            var go = new GameObject("Container_RustySword");
+            go.transform.SetParent(gameplay);
+            go.transform.position = skeleton.TransformPoint(SwordLocal);
+            go.transform.rotation = skeleton.rotation;
+
+            var trigger = go.AddComponent<BoxCollider>();
+            trigger.isTrigger = true;
+            trigger.center = new Vector3(0f, 0.55f, 0f);
+            trigger.size = new Vector3(0.7f, 1.2f, 0.7f);
+
+            var container = go.AddComponent<Game.Gameplay.Items.WorldContainer>();
+            container.ContainerId = "ravine_rusty_sword";
+            container.Range = 2f;
+
+            // модель: остриём в землю на 20 см, чуть завалена набок
+            const float tip = 0.903f; // от центра рукояти до острия (lowpoly_kit.SWORD_TIP)
+            var visual = new GameObject("Model").transform;
+            visual.SetParent(go.transform, false);
+            visual.localRotation = Quaternion.Euler(-12f, 0f, 9f);
+            visual.localPosition = visual.localRotation * new Vector3(0f, tip - 0.2f, 0f);
+
+            var swordModel = AssetDatabase.LoadAssetAtPath<GameObject>(HeroBuilder.SwordFbx);
+            if (swordModel != null)
+            {
+                var inst = (GameObject)PrefabUtility.InstantiatePrefab(swordModel, visual);
+                inst.transform.localPosition = Vector3.zero;
+                inst.transform.localRotation = Quaternion.Euler(180f, 0f, 0f); // в FBX клинок смотрит вверх
+                var mat = AssetDatabase.LoadAssetAtPath<Material>(HeroBuilder.MaterialsDir + "/M_Sword_Rusty.mat");
+                if (mat != null)
+                    foreach (var r in inst.GetComponentsInChildren<Renderer>()) r.sharedMaterial = mat;
+            }
+            else
+            {
+                var rust = ShowcaseSceneBuilder.Mat("Rust", new Color(0.48f, 0.3f, 0.2f));
+                var grip = ShowcaseSceneBuilder.Mat("Wood", new Color(0.4f, 0.27f, 0.15f));
+                void Part(PrimitiveType t, string n, Vector3 local, Vector3 scale, Material m)
+                {
+                    var p = ShowcaseSceneBuilder.Prop(t, visual, n, Vector3.zero, scale, m, keepCollider: false);
+                    p.transform.localPosition = local;
+                    p.transform.localRotation = Quaternion.identity;
+                }
+                Part(PrimitiveType.Cube, "Sword_Blade", new Vector3(0f, -0.45f, 0f), new Vector3(0.07f, 0.8f, 0.015f), rust);
+                Part(PrimitiveType.Cube, "Sword_Guard", new Vector3(0f, -0.04f, 0f), new Vector3(0.22f, 0.03f, 0.03f), rust);
+                Part(PrimitiveType.Cylinder, "Sword_Grip", new Vector3(0f, 0.04f, 0f), new Vector3(0.03f, 0.09f, 0.03f), grip);
+            }
+
+            // холодный блик на клинке, чтобы место читалось издалека (гаснет вместе с мечом)
+            var lightGo = new GameObject("SwordGlint");
+            lightGo.transform.SetParent(go.transform, false);
+            lightGo.transform.localPosition = new Vector3(0f, 1.2f, -0.2f);
+            var l = lightGo.AddComponent<Light>();
+            l.type = LightType.Point;
+            l.color = new Color(0.7f, 0.8f, 1f);
+            l.range = 4f;
+            l.intensity = 1.6f;
+            l.shadows = LightShadows.None;
+        }
+
+        /// <summary>Скелет из примитивов — если модели Prop_Skeleton_Soldier.fbx ещё нет в проекте.</summary>
+        private static void BuildSkeletonPlaceholder(Transform root)
+        {
             var bone = ShowcaseSceneBuilder.Mat("Bone", new Color(0.82f, 0.78f, 0.66f));
-            var rust = ShowcaseSceneBuilder.Mat("Rust", new Color(0.48f, 0.3f, 0.2f));
-            var grip = ShowcaseSceneBuilder.Mat("Wood", new Color(0.4f, 0.27f, 0.15f));
 
             void Part(PrimitiveType t, string n, Vector3 local, Vector3 scale, Vector3 euler, Material m)
             {
@@ -257,23 +347,7 @@ namespace Game.Editor
                 Part(PrimitiveType.Cylinder, "Rib", new Vector3(0f, 0.28f + i * 0.09f, -0.12f), new Vector3(0.04f, 0.17f, 0.04f), new Vector3(0f, 0f, 90f), bone);
             Part(PrimitiveType.Cylinder, "Leg_L", new Vector3(-0.15f, 0.06f, 0.35f), new Vector3(0.06f, 0.4f, 0.06f), new Vector3(90f, -8f, 0f), bone);
             Part(PrimitiveType.Cylinder, "Leg_R", new Vector3(0.17f, 0.06f, 0.3f), new Vector3(0.06f, 0.38f, 0.06f), new Vector3(90f, 14f, 0f), bone);
-            Part(PrimitiveType.Cylinder, "Arm", new Vector3(0.28f, 0.25f, 0.05f), new Vector3(0.045f, 0.28f, 0.045f), new Vector3(60f, 0f, 30f), bone);
-
-            // меч воткнут в землю рядом
-            Part(PrimitiveType.Cube, "Sword_Blade", new Vector3(0.75f, 0.45f, 0.45f), new Vector3(0.09f, 1f, 0.025f), new Vector3(0f, 30f, 12f), rust);
-            Part(PrimitiveType.Cube, "Sword_Guard", new Vector3(0.65f, 0.95f, 0.45f), new Vector3(0.36f, 0.06f, 0.07f), new Vector3(0f, 30f, 12f), rust);
-            Part(PrimitiveType.Cylinder, "Sword_Grip", new Vector3(0.62f, 1.08f, 0.45f), new Vector3(0.05f, 0.12f, 0.05f), new Vector3(0f, 30f, 12f), grip);
-
-            // холодный «блик» на клинке, чтобы место читалось издалека
-            var lightGo = new GameObject("SwordGlint");
-            lightGo.transform.SetParent(root, false);
-            lightGo.transform.localPosition = new Vector3(0.7f, 1.4f, 0.6f);
-            var l = lightGo.AddComponent<Light>();
-            l.type = LightType.Point;
-            l.color = new Color(0.7f, 0.8f, 1f);
-            l.range = 4f;
-            l.intensity = 1.6f;
-            l.shadows = LightShadows.None;
+            Part(PrimitiveType.Cylinder, "Arm", new Vector3(-0.28f, 0.25f, 0.05f), new Vector3(0.045f, 0.28f, 0.045f), new Vector3(60f, 0f, -30f), bone);
         }
 
         private static void BuildDebris(Transform parent)

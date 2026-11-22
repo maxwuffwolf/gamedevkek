@@ -1,5 +1,6 @@
 using Game.Core;
 using Game.Gameplay.Dialogue;
+using Game.Gameplay.Items;
 using Game.Gameplay.Zones;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -21,6 +22,7 @@ namespace Game.UI
         public HudView Hud { get; private set; }
         public InventoryView Inventory { get; private set; }
         public DialogueView Dialogue { get; private set; }
+        public ContainerView Container { get; private set; }
 
         public static UIRoot Create()
         {
@@ -50,6 +52,7 @@ namespace Game.UI
             MessageFeedView.Create(root.Canvas);
             root.Dialogue = DialogueView.Create(root.Canvas);
             root.Inventory = InventoryView.Create(root.Canvas);
+            root.Container = ContainerView.Create(root.Canvas, root.Inventory);
             DeathView.Create(root.Canvas);
             TooltipView.Create(root.Canvas);
             LoadingScreenView.Create(root.Canvas); // поверх всего
@@ -83,7 +86,9 @@ namespace Game.UI
             if (GameInput.Down(GameKey.Escape))
             {
                 var dialogue = Services.Get<DialogueService>();
+                var containers = Services.Get<ContainerService>();
                 if (dialogue.IsOpen) dialogue.Close();
+                else if (containers.IsOpen) containers.Close();
                 else if (Inventory.IsOpen) Inventory.Toggle(false);
             }
         }
