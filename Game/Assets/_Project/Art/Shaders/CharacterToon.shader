@@ -253,7 +253,8 @@ Shader "Game/Character Toon"
                         Light l = GetAdditionalLight(lightIndex, input.positionWS);
                         // мягкий «бассейн» света вместо ступенек: ступенчатый точечный свет рисует на земле жёсткие круги
                         half a = saturate(dot(n, l.direction)) * l.distanceAttenuation;
-                        half aSoft = saturate((dot(n, l.direction) + 0.25) / 1.25) * min(l.distanceAttenuation, 2.0);
+                        half att = l.distanceAttenuation;
+                        half aSoft = saturate((dot(n, l.direction) + 0.25) / 1.25) * att / (1.0 + att); // мягкое насыщение: вблизи источника не «выжигает»
                         light += l.color * lerp(Band(saturate(a), _Steps, _StepSmooth), aSoft, _PointSmooth);
                     LIGHT_LOOP_END
                 #endif

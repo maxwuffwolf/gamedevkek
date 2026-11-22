@@ -26,7 +26,7 @@ namespace Game.Editor
         /// Версия настроек атмосферы. Если поднять её, при следующей пересборке сцены профиль пост-обработки
         /// и материалы (эффекты, окружение) перезапишутся значениями из кода. Иначе ручные правки сохраняются.
         /// </summary>
-        public const int SettingsVersion = 4;
+        public const int SettingsVersion = 7;
         private const string VersionKey = "Game.Atmosphere.SettingsVersion";
 
         /// <summary>true, пока идёт пересборка, где ассеты нужно обновить до <see cref="SettingsVersion"/>.</summary>
@@ -45,12 +45,12 @@ namespace Game.Editor
         //     v4 (визуал «как у Shape of Dreams»): общий свет темнее, чтобы локальные источники (грибы, кристаллы,
         //     светлячки, свет героя) стали яркими пятнами, за которые цепляется глаз. Контраст делает пост-обработка.
         public static readonly Color SunColor = new Color(0.55f, 0.66f, 1f);      // лунный ключевой свет
-        public const float SunIntensity = 0.62f;
+        public const float SunIntensity = 1f;
         public static readonly Color FillColor = new Color(1f, 0.5f, 0.3f);       // отсвет заката у горизонта
         public const float FillIntensity = 0.32f;
         public static readonly Color FogColor = new Color(0.07f, 0.08f, 0.16f);
-        public static readonly Color SkyAmbient = new Color(0.17f, 0.2f, 0.38f);
-        public static readonly Color EquatorAmbient = new Color(0.13f, 0.12f, 0.22f);
+        public static readonly Color SkyAmbient = new Color(0.2f, 0.23f, 0.42f);
+        public static readonly Color EquatorAmbient = new Color(0.15f, 0.14f, 0.25f);
         public static readonly Color GroundAmbient = new Color(0.04f, 0.035f, 0.065f);
         public const float FogDensity = 0.012f;
 
@@ -170,19 +170,19 @@ namespace Game.Editor
             // Bloom: всё, что ярче порога (эмиссия грибов/кристаллов, светлячки, искры, глаза), получает ореол
             var bloom = Add<Bloom>(profile);
             bloom.threshold.Override(0.8f);
-            bloom.intensity.Override(1.5f);
+            bloom.intensity.Override(1.1f);
             bloom.scatter.Override(0.72f);
             bloom.tint.Override(new Color(1f, 0.95f, 0.9f));
             bloom.highQualityFiltering.Override(true);
 
             var color = Add<ColorAdjustments>(profile);
-            color.postExposure.Override(0.5f);
+            color.postExposure.Override(0.85f);
             color.contrast.Override(20f);
-            color.saturation.Override(18f);
+            color.saturation.Override(6f);
 
             // тени чуть опускаем и холодим (было: подняты — отсюда «серость»), света слегка тёплые
             var lgg = Add<LiftGammaGain>(profile);
-            lgg.lift.Override(new Vector4(0.95f, 0.98f, 1.06f, -0.03f));
+            lgg.lift.Override(new Vector4(1f, 1f, 1.04f, 0f)); // без отрицательного сдвига: он даёт цветные «кольца» в тёмных местах
             lgg.gamma.Override(new Vector4(1f, 1f, 1f, 0f));
             lgg.gain.Override(new Vector4(1.04f, 1f, 0.95f, 0.03f));
 
@@ -302,7 +302,7 @@ namespace Game.Editor
             // тёплое пятно вокруг героя на холодной земле: герой всегда стоит «в свете» и читается на фоне
             l.color = new Color(1f, 0.8f, 0.58f);
             l.range = 8f;
-            l.intensity = 3.2f;
+            l.intensity = 7f;
             l.shadows = LightShadows.None;
             go.AddComponent<Game.Gameplay.World.HeroLight>();
         }

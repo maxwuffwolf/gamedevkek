@@ -195,10 +195,10 @@ namespace Game.Editor
             ShowcaseSceneBuilder.Prop(PrimitiveType.Cylinder, root, "Scorch", c + Vector3.up * 0.01f, new Vector3(11f, 0.01f, 11f),
                 ShowcaseSceneBuilder.Mat("Scorch", new Color(0.11f, 0.09f, 0.1f)), keepCollider: false);
             ShowcaseSceneBuilder.Prop(PrimitiveType.Cylinder, root, "ImpactGlow", c + Vector3.up * 0.016f, new Vector3(2.4f, 0.01f, 2.4f),
-                ShowcaseSceneBuilder.UnlitMat("ImpactGlow", new Color(2.4f, 0.9f, 0.3f)), keepCollider: false);
+                ShowcaseSceneBuilder.UnlitMat("ImpactGlow", new Color(1.25f, 0.48f, 0.16f)), keepCollider: false);
 
             // раскалённые трещины от центра
-            var crackMat = ShowcaseSceneBuilder.UnlitMat("Crack", new Color(1.8f, 0.6f, 0.15f));
+            var crackMat = ShowcaseSceneBuilder.UnlitMat("Crack", new Color(1.05f, 0.36f, 0.1f));
             for (int i = 0; i < 9; i++)
             {
                 float yaw = i * 40f + Range(-12f, 12f);
@@ -228,12 +228,12 @@ namespace Game.Editor
             var l = lightGo.AddComponent<Light>();
             l.type = LightType.Point;
             l.color = new Color(1f, 0.55f, 0.25f);
-            l.range = 12f;
-            l.intensity = 5f;
+            l.range = 10f;
+            l.intensity = 2.4f;
             l.shadows = LightShadows.None;
             var flicker = lightGo.AddComponent<LightFlicker>();
-            flicker.BaseIntensity = 5f;
-            flicker.Amount = 1f;
+            flicker.BaseIntensity = 2.4f;
+            flicker.Amount = 0.5f;
             flicker.Speed = 3f;
 
             AtmosphereBuilder.BuildEmbers(root, c + Vector3.up * 0.2f);
@@ -511,8 +511,8 @@ namespace Game.Editor
             var root = new GameObject("Crystals").transform;
             root.SetParent(parent);
             var mesh = CrystalMesh();
-            var violet = (mat: GlowMat("CrystalViolet", new Color(0.55f, 0.3f, 0.95f), new Color(0.9f, 0.35f, 2.2f)), light: new Color(0.7f, 0.4f, 1f));
-            var gold = (mat: GlowMat("CrystalGold", new Color(1f, 0.75f, 0.35f), new Color(2.2f, 1.25f, 0.3f)), light: new Color(1f, 0.7f, 0.35f));
+            var violet = (mat: GlowMat("CrystalViolet", new Color(0.55f, 0.3f, 0.95f), new Color(0.55f, 0.2f, 1.3f)), light: new Color(0.7f, 0.4f, 1f));
+            var gold = (mat: GlowMat("CrystalGold", new Color(1f, 0.75f, 0.35f), new Color(1.25f, 0.7f, 0.18f)), light: new Color(1f, 0.7f, 0.35f));
 
             void Cluster(Vector3 p, (Material mat, Color light) kind, float scale)
             {
@@ -533,7 +533,7 @@ namespace Game.Editor
                     r.sharedMaterial = kind.mat;
                     r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 }
-                AddPointLight(cluster, "CrystalLight", p + Vector3.up * 1f, kind.light, 4.5f * Mathf.Sqrt(scale), 2.4f, flicker: 0.2f);
+                AddPointLight(cluster, "CrystalLight", p + Vector3.up * 1f, kind.light, 4.5f * Mathf.Sqrt(scale), 1.6f, flicker: 0.2f);
             }
 
             // у кратера: кольцо осколков, золото и фиолет вперемешку
