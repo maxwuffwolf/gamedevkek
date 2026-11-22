@@ -20,26 +20,34 @@ namespace Game.UI
 
         public static DialogueView Create(RectTransform canvas)
         {
-            var window = UiKit.Image(canvas, "Dialogue", UiKit.PanelColor, true).rectTransform;
-            window.Place(new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 250f), new Vector2(720f, 300f));
-            UiKit.Frame(window, UiKit.FrameColor, 3f);
+            // подложка-градиент во всю ширину снизу, имя и реплика по центру, ответы «таблетками» справа (как в Genshin)
+            var band = UiKit.Image(canvas, "Dialogue", new Color(0.03f, 0.04f, 0.07f, 0.88f), true);
+            band.sprite = UiKit.FadeUp;
+            var window = band.rectTransform;
+            window.anchorMin = new Vector2(0f, 0f);
+            window.anchorMax = new Vector2(1f, 0f);
+            window.pivot = new Vector2(0.5f, 0f);
+            window.anchoredPosition = Vector2.zero;
+            window.sizeDelta = new Vector2(0f, 330f);
             var view = window.gameObject.AddComponent<DialogueView>();
             view._rect = window;
             view._dialogue = Services.Get<DialogueService>();
 
-            view._speaker = UiKit.Text(window, "Speaker", "", 22, UiKit.Gold, TextAnchor.UpperLeft, FontStyle.Bold).Shadowed();
-            view._speaker.rectTransform.Place(new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(20f, -12f), new Vector2(600f, 28f));
-            view._body = UiKit.Text(window, "Body", "", 18, UiKit.TextColor, TextAnchor.UpperLeft);
-            view._body.rectTransform.Place(new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(20f, -46f), new Vector2(680f, 120f));
+            view._speaker = UiKit.Text(window, "Speaker", "", 24, UiTheme.Gold, TextAnchor.MiddleCenter, FontStyle.Bold).Shadowed();
+            view._speaker.rectTransform.Place(new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 128f), new Vector2(700f, 32f));
+            view._body = UiKit.Text(window, "Body", "", 20, UiTheme.Text, TextAnchor.UpperCenter).Shadowed();
+            view._body.rectTransform.Place(new Vector2(0.5f, 0f), new Vector2(0.5f, 1f), new Vector2(0f, 120f), new Vector2(1000f, 90f));
             view._options = UiKit.Rect("Options", window);
-            view._options.Place(new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(20f, 14f), new Vector2(680f, 120f));
-            var close = UiKit.Button(window, "Close", "×", () => view._dialogue.Close(), 22);
-            close.GetComponent<RectTransform>().Place(new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-8f, -8f), new Vector2(32f, 32f));
+            view._options.Place(new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-120f, 200f), new Vector2(OptionWidth, 10f));
+            var close = UiKit.CloseButton(window, () => view._dialogue.Close());
+            close.GetComponent<RectTransform>().Place(new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-40f, 40f), new Vector2(34f, 34f));
 
             EventBus.Subscribe<DialogueChangedEvent>(view.OnChanged);
             window.gameObject.SetActive(false);
             return view;
         }
+
+        private const float OptionWidth = 380f;
 
         private void OnDestroy() => EventBus.Unsubscribe<DialogueChangedEvent>(OnChanged);
 
@@ -59,19 +67,24 @@ namespace Game.UI
             foreach (var b in _buttons) Destroy(b.gameObject);
             _buttons.Clear();
             var opts = _dialogue.Options;
-            float h = 34f, gap = 6f;
+            const float h = 42f, gap = 8f;
             for (int i = 0; i < opts.Count; i++)
             {
                 int index = i;
-                var btn = UiKit.Button(_options, $"Option{i}", $"{i + 1}. {_dialogue.FormatText(opts[i].Text)}", () => _dialogue.Choose(index), 17);
+                var btn = UiKit.Button(_options, $"Option{i}", _dialogue.FormatText(opts[i].Text), () => _dialogue.Choose(index), 17);
+                var img = btn.GetComponent<Image>();
+                img.color = UiTheme.PanelSoft;
+                UiKit.Outline(img.rectTransform, UiTheme.Line, UiTheme.RadiusPill);
                 var label = btn.GetComponentInChildren<Text>();
                 label.alignment = TextAnchor.MiddleLeft;
-                btn.GetComponent<RectTransform>().Place(new Vector2(0f, 0f), new Vector2(0f, 0f),
-                    new Vector2(0f, (opts.Count - 1 - i) * (h + gap)), new Vector2(680f, h));
+                label.rectTransform.Stretch(48, 2, 16, 2);
+                var key = UiKit.KeyChip(btn.transform, (i + 1).ToString(), 13);
+                key.rectTransform.Place(new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(9f, 0f), new Vector2(26f, 26f));
+                // ответы растут вверх от нижней точки, первый — сверху
+                btn.GetComponent<RectTransform>().Place(new Vector2(1f, 0f), new Vector2(1f, 0f),
+                    new Vector2(0f, (opts.Count - 1 - i) * (h + gap)), new Vector2(OptionWidth, h));
                 _buttons.Add(btn);
             }
-            float needed = 60f + Mathf.Max(60f, _body.preferredHeight) + opts.Count * (h + gap) + 20f;
-            _rect.sizeDelta = new Vector2(720f, Mathf.Max(220f, needed));
         }
 
         private void Update()

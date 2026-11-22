@@ -33,15 +33,15 @@ namespace Game.UI
 
         private Bar CreateBar()
         {
-            var root = UiKit.Image(_root, "Bar", new Color(0f, 0f, 0f, 0.75f)).rectTransform;
-            root.sizeDelta = new Vector2(70f, 8f);
+            var root = UiKit.Image(_root, "Bar", new Color(0f, 0f, 0f, 0.55f)).Round(UiTheme.RadiusPill).rectTransform;
+            root.sizeDelta = new Vector2(72f, 7f);
             root.anchorMin = root.anchorMax = new Vector2(0.5f, 0.5f);
-            var fill = UiKit.Image(root, "Fill", new Color(0.85f, 0.15f, 0.12f)).rectTransform;
+            var fill = UiKit.Image(root, "Fill", UiTheme.Enemy).Round(UiTheme.RadiusPill).rectTransform;
             fill.anchorMin = Vector2.zero;
             fill.anchorMax = Vector2.one;
             fill.offsetMin = new Vector2(1f, 1f);
             fill.offsetMax = new Vector2(-1f, -1f);
-            var name = UiKit.Text(root, "Name", "", 14, Color.white).Shadowed();
+            var name = UiKit.Text(root, "Name", "", 14, UiTheme.Text, TextAnchor.MiddleCenter, FontStyle.Bold).Shadowed();
             name.rectTransform.Place(new Vector2(0.5f, 1f), new Vector2(0.5f, 0f), new Vector2(0f, 2f), new Vector2(220f, 18f));
             return new Bar { Root = root, Fill = fill, Name = name };
         }
@@ -70,7 +70,7 @@ namespace Game.UI
                 bar.Root.anchoredPosition = local;
                 bar.Fill.anchorMax = new Vector2(Mathf.Clamp01(a.Health01), 1f);
                 bool showName = a == hovered || Time.time - a.LastDamagedTime < 3f;
-                bar.Name.text = showName ? $"{a.DisplayName} <color=#c8c8c8>[{a.Level}]</color>" : "";
+                bar.Name.text = showName ? $"{a.DisplayName} <color=#b9b5ad>{a.Level}</color>" : "";
             }
 
             _remove.Clear();

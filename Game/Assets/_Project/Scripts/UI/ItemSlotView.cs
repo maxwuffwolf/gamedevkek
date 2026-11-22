@@ -28,7 +28,8 @@ namespace Game.UI
         public Action<ItemSlotView, ItemSlotView> DroppedOn; // (откуда, куда)
 
         private Image _bg;
-        private Image _rarityFrame;
+        private Image _rarityFrame; // обводка по редкости
+        private Image _stripe;      // цветная полоска снизу (как карточки в Genshin)
         private Image _icon;
         private Text _iconText;
         private Text _placeholder;
@@ -43,17 +44,24 @@ namespace Game.UI
 
         public static ItemSlotView Create(Transform parent, string name, Vector2 size, string placeholder)
         {
-            var frame = UiKit.Image(parent, name, new Color(0.3f, 0.27f, 0.22f), true);
+            // корневой Image — фон ячейки (ловит мышь), поверх — полоска редкости и обводка
+            var frame = UiKit.Image(parent, name, UiTheme.Cell, true).Round(UiTheme.RadiusCell);
             frame.rectTransform.sizeDelta = size;
             var view = frame.gameObject.AddComponent<ItemSlotView>();
-            view._rarityFrame = frame;
-            view._bg = UiKit.Image(frame.transform, "Bg", UiKit.SlotColor);
-            view._bg.rectTransform.Stretch(2, 2, 2, 2);
-            view._placeholder = UiKit.Text(frame.transform, "Placeholder", placeholder, 11, new Color(1f, 1f, 1f, 0.25f));
+            view._bg = frame;
+            view._stripe = UiKit.Image(frame.transform, "Stripe", Color.clear).Round(3);
+            var st = view._stripe.rectTransform;
+            st.anchorMin = new Vector2(0f, 0f);
+            st.anchorMax = new Vector2(1f, 0f);
+            st.pivot = new Vector2(0.5f, 0f);
+            st.offsetMin = new Vector2(6f, 3f);
+            st.offsetMax = new Vector2(-6f, 7f);
+            view._rarityFrame = UiKit.Outline(frame.rectTransform, Color.clear, UiTheme.RadiusCell, 2);
+            view._placeholder = UiKit.Text(frame.transform, "Placeholder", placeholder, 11, new Color(1f, 1f, 1f, 0.28f));
             view._placeholder.rectTransform.Stretch(2, 2, 2, 2);
             view._placeholderLabel = placeholder;
             view._icon = UiKit.Image(frame.transform, "Icon", Color.clear);
-            view._icon.rectTransform.Stretch(6, 6, 6, 6);
+            view._icon.rectTransform.Stretch(9, 8, 9, 10);
             view._iconText = UiKit.Text(view._icon.transform, "Abbr", "", 15, Color.white, TextAnchor.MiddleCenter, FontStyle.Bold).Shadowed();
             view._iconText.rectTransform.Stretch();
             return view;
@@ -63,10 +71,11 @@ namespace Game.UI
         {
             bool locked = IsLocked != null && IsLocked();
             var item = GetItem?.Invoke();
-            _bg.color = locked ? new Color(0.05f, 0.05f, 0.05f, 0.95f) : UiKit.SlotColor;
+            _bg.color = locked ? UiTheme.CellLocked : UiTheme.Cell;
+            _stripe.color = Color.clear;
             if (locked)
             {
-                _rarityFrame.color = new Color(0.15f, 0.14f, 0.12f);
+                _rarityFrame.color = Color.clear;
                 _icon.color = Color.clear;
                 _icon.sprite = UiKit.White;
                 _iconText.text = "";
@@ -80,7 +89,7 @@ namespace Game.UI
 
             if (item == null)
             {
-                _rarityFrame.color = new Color(0.3f, 0.27f, 0.22f);
+                _rarityFrame.color = Color.clear;
                 _icon.color = Color.clear;
                 _iconText.text = "";
                 _placeholder.enabled = true;
@@ -90,16 +99,23 @@ namespace Game.UI
             var def = db.Item(item.BaseId);
             var visual = visuals.Item(item.BaseId);
             _placeholder.enabled = false;
-            _rarityFrame.color = db.RarityColor(item.Rarity);
+            var rc = db.RarityColor(item.Rarity);
+            var tint = Color.Lerp(UiTheme.Cell, rc, 0.3f);
+            _bg.color = new Color(tint.r, tint.g, tint.b, 0.75f);
+            _stripe.color = rc;
+            _rarityFrame.color = new Color(rc.r, rc.g, rc.b, 0.6f);
             if (visual != null && visual.Icon != null)
             {
                 _icon.sprite = visual.Icon;
+                _icon.type = Image.Type.Simple;
+                _icon.preserveAspect = true;
                 _icon.color = Color.white;
                 _iconText.text = "";
             }
             else
             {
-                _icon.sprite = UiKit.White;
+                _icon.sprite = UiKit.Rounded(8);
+                _icon.type = Image.Type.Sliced;
                 _icon.color = ColorUtil.Parse(def?.Icon?.Color, Color.gray);
                 _iconText.text = def?.Icon?.Text ?? "?";
             }
