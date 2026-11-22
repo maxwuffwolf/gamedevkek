@@ -304,7 +304,7 @@ namespace Game.Editor
             l.range = 8f;
             l.intensity = 7f;
             l.shadows = LightShadows.None;
-            go.AddComponent<Game.Gameplay.World.HeroLight>();
+            go.AddComponent<Game.Gameplay.World.HeroLight>().Height = 2.2f; // ниже — ярче и уже пятно на земле
         }
 
         // --- частицы

@@ -59,6 +59,7 @@ namespace Game.Editor
             BuildGlowShrooms(env);
             BuildCrystals(env);
             BuildGlowFlowers(env);
+            BuildGroundDetail(env);
             // частицы (светлячки, пылинки, дымка) только над ущельем: так они гуще там, где их видно
             AtmosphereBuilder.BuildEffects(env, _rng, new Vector3(0f, 0f, 0f), new Vector2(28f, ZMax - ZMin));
 
@@ -110,21 +111,44 @@ namespace Game.Editor
             ground.name = "Ground";
             ground.transform.SetParent(parent);
             ground.transform.localScale = new Vector3(12f, 1f, 12f);
-            ground.GetComponent<Renderer>().sharedMaterial = ShowcaseSceneBuilder.Mat("RavineFloor", new Color(0.31f, 0.28f, 0.27f));
+            ground.GetComponent<Renderer>().sharedMaterial = GroundMaterial();
 
-            // тропа от кратера к выходу
+            // тропа рисуется прямо шейдером земли (Game/Ground Toon), здесь только подъём за аркой — намёк «там выход наверх»
             var pathMat = ShowcaseSceneBuilder.Mat("RavinePath", new Color(0.42f, 0.35f, 0.28f));
-            for (float z = CraterZ + 5f; z < ExitZ - 1f; z += 2.6f)
-            {
-                var p = ShowcaseSceneBuilder.Prop(PrimitiveType.Cylinder, parent, "Path", Floor(z, 0.08f * Mathf.Sin(z * 0.4f)) + Vector3.up * 0.005f,
-                    new Vector3(Range(2f, 2.8f), 0.01f, Range(2.2f, 3f)), pathMat, keepCollider: false);
-                p.transform.rotation = Quaternion.Euler(0f, Range(0f, 360f), 0f);
-            }
-
-            // тропа уходит вверх за аркой — намёк «там выход наверх»
             var ramp = ShowcaseSceneBuilder.Prop(PrimitiveType.Cube, parent, "ExitRamp", Floor(ExitZ + 5f) + Vector3.up * 1.2f,
                 new Vector3(5f, 0.4f, 8f), pathMat, keepCollider: false);
             ramp.transform.rotation = Quaternion.Euler(-16f, 0f, 0f);
+        }
+
+        /// <summary>
+        /// Материал земли: процедурный шейдер (земля пятнами, мох, тропа, камешки, листья). Тропа повторяет
+        /// <see cref="CenterX"/>. Создаётся один раз — потом цвета можно крутить в инспекторе, параметры тропы
+        /// переписываются при каждой пересборке (они должны совпадать с формой ущелья).
+        /// </summary>
+        private static Material GroundMaterial()
+        {
+            const string path = "Assets/_Project/Art/Generated/Materials/RavineGround.mat";
+            var shader = Shader.Find("Game/Ground Toon");
+            if (shader == null)
+            {
+                Debug.LogWarning("[Game] Нет шейдера Game/Ground Toon — земля будет однотонной. Проверь Console на ошибки шейдеров.");
+                return ShowcaseSceneBuilder.Mat("RavineFloor", new Color(0.31f, 0.28f, 0.27f));
+            }
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (m == null)
+            {
+                m = new Material(shader) { name = "RavineGround" };
+                AssetDatabase.CreateAsset(m, path);
+            }
+            m.shader = shader;
+            m.SetFloat("_PathAmp", 3.5f);       // = CenterX
+            m.SetFloat("_PathFreq", 0.055f);
+            m.SetFloat("_PathOffsetX", 0f);
+            m.SetFloat("_PathWidth", 1.5f);
+            m.SetFloat("_PathZMin", CraterZ + 4f);
+            m.SetFloat("_PathZMax", ExitZ + 10f);
+            EditorUtility.SetDirty(m);
+            return m;
         }
 
         private static void BuildCliffs(Transform parent)
@@ -578,6 +602,144 @@ namespace Game.Editor
                     ShowcaseSceneBuilder.Prop(PrimitiveType.Sphere, root, "Flower",
                         p + new Vector3(Range(-0.6f, 0.6f), Range(0.08f, 0.22f), Range(-0.6f, 0.6f)), Vector3.one * s, mat, keepCollider: false);
                 }
+            }
+        }
+
+        // ------------------------------------------------------------------ мелкая детализация
+        // Между крупными объектами не должно быть «пустого пола»: корни у стен, ветки, камешки, кучки листьев, кости.
+
+        private static void BuildGroundDetail(Transform parent)
+        {
+            var root = new GameObject("GroundDetail").transform;
+            root.SetParent(parent);
+            var rootMat = ShowcaseSceneBuilder.Mat("Roots", new Color(0.3f, 0.22f, 0.18f));
+            var twigMat = ShowcaseSceneBuilder.Mat("Twigs", new Color(0.36f, 0.27f, 0.2f));
+            var pebbleMat = ShowcaseSceneBuilder.Mat("Pebbles", new Color(0.44f, 0.42f, 0.47f));
+            var boneMat = ShowcaseSceneBuilder.Mat("Bone", new Color(0.82f, 0.78f, 0.66f));
+            var leafMats = new[]
+            {
+                ShowcaseSceneBuilder.Mat("LeafRust", new Color(0.62f, 0.32f, 0.18f)),
+                ShowcaseSceneBuilder.Mat("LeafOchre", new Color(0.66f, 0.5f, 0.22f)),
+                ShowcaseSceneBuilder.Mat("LeafDry", new Color(0.45f, 0.36f, 0.26f)),
+            };
+            var rockPrefabs = EnvironmentPrefabs.Load("Rock");
+            var grassPrefabs = EnvironmentPrefabs.Load("Grass");
+            var bushPrefabs = EnvironmentPrefabs.Load("Bush");
+
+            GameObject Piece(PrimitiveType t, string name, Vector3 pos, Vector3 scale, Quaternion rot, Material m)
+            {
+                var go = ShowcaseSceneBuilder.Prop(t, root, name, pos, scale, m, keepCollider: false);
+                go.transform.rotation = rot;
+                var r = go.GetComponent<Renderer>();
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                return go;
+            }
+
+            // корни: выползают из-под стен на пол, по 2–4 изогнутых сегмента
+            for (float z = ZMin + 3f; z < ZMax - 3f; z += Range(2.2f, 4f))
+            {
+                int side = _rng.NextDouble() < 0.5 ? -1 : 1;
+                var start = Floor(z, side * 1.02f);
+                if (Reserved(Floor(z, side * 0.9f), side * 0.9f)) continue;
+                float yaw = side > 0 ? 270f : 90f; // от стены к центру
+                yaw += Range(-35f, 35f);
+                var p = start;
+                float thick = Range(0.09f, 0.16f);
+                int segs = _rng.Next(2, 5);
+                for (int k = 0; k < segs; k++)
+                {
+                    float len = Range(0.6f, 1.2f);
+                    var dir = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+                    var mid = p + dir * len * 0.5f + Vector3.up * thick * 0.25f;
+                    Piece(PrimitiveType.Cylinder, "Root", mid, new Vector3(thick, len * 0.5f, thick),
+                        Quaternion.LookRotation(dir) * Quaternion.Euler(90f, 0f, 0f), rootMat);
+                    p += dir * len;
+                    yaw += Range(-30f, 30f);
+                    thick *= 0.75f;
+                }
+            }
+
+            // ветки с сучками
+            for (int i = 0; i < 40; i++)
+            {
+                float z = Range(ZMin + 3f, ZMax - 3f), across = Range(-0.9f, 0.9f);
+                var p = Floor(z, across);
+                if (Reserved(p, across)) continue;
+                float yaw = Range(0f, 360f), len = Range(0.6f, 1.4f);
+                var rot = Quaternion.Euler(0f, yaw, 0f);
+                Piece(PrimitiveType.Cylinder, "Branch", p + Vector3.up * 0.03f, new Vector3(0.05f, len * 0.5f, 0.05f), rot * Quaternion.Euler(90f, 0f, 0f), twigMat);
+                for (int k = 0; k < 2; k++)
+                {
+                    var at = p + rot * Vector3.forward * Range(-len * 0.35f, len * 0.35f) + Vector3.up * 0.03f;
+                    var twigRot = rot * Quaternion.Euler(0f, (k == 0 ? 1 : -1) * Range(30f, 60f), 0f);
+                    float tl = Range(0.2f, 0.4f);
+                    Piece(PrimitiveType.Cylinder, "Twig", at + twigRot * Vector3.forward * tl * 0.5f, new Vector3(0.025f, tl * 0.5f, 0.025f),
+                        twigRot * Quaternion.Euler(90f, 0f, 0f), twigMat);
+                }
+            }
+
+            // камешки: мелкие версии камней из набора (или кубики)
+            for (int i = 0; i < 140; i++)
+            {
+                float z = Range(ZMin + 2f, ZMax - 2f), across = Range(-0.97f, 0.97f);
+                var p = Floor(z, across);
+                if (Vector3.Distance(p, SkeletonPos) < 2f) continue;
+                if (rockPrefabs.Length > 0)
+                {
+                    var go = PlacePrefab(root, rockPrefabs, p, 0.12f, 0.28f);
+                    foreach (var c in go.GetComponentsInChildren<Collider>()) c.enabled = false; // камешки не мешают ходить
+                }
+                else
+                {
+                    float s = Range(0.08f, 0.2f);
+                    Piece(PrimitiveType.Cube, "Pebble", p + Vector3.up * s * 0.3f, new Vector3(s, s * 0.6f, s * 1.2f),
+                        Quaternion.Euler(Range(-20f, 20f), Range(0f, 360f), Range(-20f, 20f)), pebbleMat);
+                }
+            }
+
+            // кучки сухих листьев: плоские «пластинки» тёплых цветов, гуще у стен
+            for (int i = 0; i < 38; i++)
+            {
+                float z = Range(ZMin + 3f, ZMax - 3f);
+                float across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.4f, 0.95f);
+                var c = Floor(z, across);
+                if (Reserved(c, across)) continue;
+                int n = _rng.Next(6, 14);
+                for (int k = 0; k < n; k++)
+                {
+                    var at = c + new Vector3(Range(-0.7f, 0.7f), 0.012f + k * 0.002f, Range(-0.7f, 0.7f));
+                    Piece(PrimitiveType.Cube, "Leaf", at, new Vector3(Range(0.1f, 0.16f), 0.006f, Range(0.07f, 0.11f)),
+                        Quaternion.Euler(Range(-8f, 8f), Range(0f, 360f), Range(-8f, 8f)), leafMats[_rng.Next(leafMats.Length)]);
+                }
+            }
+
+            // кости — объедки падальщиков, недалеко от их логова на середине ущелья
+            for (int i = 0; i < 10; i++)
+            {
+                float z = Range(-6f, 30f), across = Range(-0.8f, 0.8f);
+                var p = Floor(z, across);
+                if (Reserved(p, across)) continue;
+                Piece(PrimitiveType.Capsule, "Bone", p + Vector3.up * 0.04f, new Vector3(0.06f, Range(0.15f, 0.25f), 0.06f),
+                    Quaternion.Euler(90f, Range(0f, 360f), 0f), boneMat);
+                if (_rng.NextDouble() < 0.4)
+                    Piece(PrimitiveType.Sphere, "Skull", p + new Vector3(Range(-0.3f, 0.3f), 0.08f, Range(-0.3f, 0.3f)), new Vector3(0.16f, 0.14f, 0.19f),
+                        Quaternion.Euler(Range(-20f, 20f), Range(0f, 360f), Range(-30f, 30f)), boneMat);
+            }
+
+            // больше травы и кустов у стен (основная трава — в BuildDebris)
+            for (int i = 0; grassPrefabs.Length > 0 && i < 220; i++)
+            {
+                float z = Range(ZMin + 2f, ZMax - 2f);
+                float across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.45f, 0.98f);
+                var p = Floor(z, across);
+                if (!Reserved(p, across)) PlacePrefab(root, grassPrefabs, p, 0.6f, 1.1f);
+            }
+            for (int i = 0; bushPrefabs.Length > 0 && i < 30; i++)
+            {
+                float z = Range(ZMin + 2f, ZMax - 2f);
+                float across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.85f, 1f);
+                var p = Floor(z, across);
+                if (!Reserved(p, across)) PlacePrefab(root, bushPrefabs, p, 0.5f, 0.9f);
             }
         }
 
