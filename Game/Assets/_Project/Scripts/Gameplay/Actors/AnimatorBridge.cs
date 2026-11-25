@@ -7,7 +7,8 @@ namespace Game.Gameplay.Actors
 {
     /// <summary>
     /// Мост к Animator настоящей модели (если она есть): float "Speed", триггер по имени из skills.json → "animation",
-    /// триггеры "Die" и "Revive". Параметры, которых нет в контроллере, просто пропускаются.
+    /// триггеры "Die" и "Revive", "Hit" при получении урона (не чаще раза в 0.25 с, у гуля — аддитивный слой поверх
+    /// бега/удара). Параметры, которых нет в контроллере, просто пропускаются.
     /// Если в контроллере есть float "{триггер}ClipLength" (длина клипа удара), то перед ударом ставится
     /// "CastSpeed" = длина клипа / длительность умения — анимация укладывается ровно во время удара.
     /// </summary>
@@ -19,6 +20,7 @@ namespace Game.Gameplay.Actors
         private Actor _actor;
         private readonly HashSet<string> _params = new();
         private readonly Dictionary<string, float> _clipLengths = new();
+        private float _lastHit = -10f;
 
         private void Start()
         {
@@ -42,6 +44,7 @@ namespace Game.Gameplay.Actors
             {
                 _actor.Died += OnDied;
                 _actor.Revived += OnRevived;
+                _actor.Damaged += OnDamaged;
             }
         }
 
@@ -52,7 +55,17 @@ namespace Game.Gameplay.Actors
             {
                 _actor.Died -= OnDied;
                 _actor.Revived -= OnRevived;
+                _actor.Damaged -= OnDamaged;
             }
+        }
+
+        private void OnDamaged(float amount, Actor source)
+        {
+            // смертельный удар — сразу Die, без вздрога
+            if (amount <= 0f || _actor.Health <= 0f || !_params.Contains("Hit")) return;
+            if (Time.time - _lastHit < 0.25f) return;
+            _lastHit = Time.time;
+            _animator.SetTrigger("Hit");
         }
 
         private void OnCast(SkillDef def, float duration)
