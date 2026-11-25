@@ -37,6 +37,7 @@ Shader "Game/Stylized Toon"
 
         [Header(Emission)]
         [HDR] _EmissionColor ("Emission (HDR, >1 glows through Bloom)", Color) = (0, 0, 0, 1)
+        _EmissionFromAlbedo ("Emission x albedo (0 = flat color, 1 = tinted by vertex colors)", Range(0, 1)) = 0
 
         [Header(Wind foliage)]
         _WindStrength ("Wind strength", Range(0, 0.3)) = 0
@@ -79,6 +80,7 @@ Shader "Game/Stylized Toon"
             half _RimPower;
             half _RimStrength;
             half4 _EmissionColor;
+            half _EmissionFromAlbedo;
             float _WindStrength;
             float _WindSpeed;
             float _WindScale;
@@ -201,6 +203,7 @@ Shader "Game/Stylized Toon"
 
                 float3 n = normalize(input.normalWS);
                 float3 v = GetWorldSpaceNormalizeViewDir(input.positionWS);
+                if (_Cull < 0.5 && dot(n, v) < 0) n = -n; // двусторонние листья: изнанка освещается как лицо
                 float2 screenUV = GetNormalizedScreenSpaceUV(input.positionCS);
                 AmbientOcclusionFactor ao = GetScreenSpaceAmbientOcclusion(screenUV);
 
@@ -235,7 +238,7 @@ Shader "Game/Stylized Toon"
                 // --- rim: светлый ободок по силуэту, сильнее на освещённой стороне
                 half rim = pow(1.0 - saturate(dot(n, v)), _RimPower);
                 color += _RimColor.rgb * rim * _RimStrength * (0.35 + 0.65 * band);
-                color += _EmissionColor.rgb;
+                color += _EmissionColor.rgb * lerp(half3(1, 1, 1), albedo, _EmissionFromAlbedo);
 
                 color = MixFog(color, input.fogFactor);
                 return half4(color, 1);

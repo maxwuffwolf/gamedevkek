@@ -68,9 +68,11 @@ namespace Game.Editor
             AddSpawner(gameplay, "Spawner_Wolves_East", "wolf", new Vector3(14f, 0f, 16f), 3, 5f, new Vector2Int(1, 2), 15f);
             AddSpawner(gameplay, "Spawner_Wolf_Alpha", "wolf_alpha", new Vector3(0f, 0f, 31f), 1, 1.5f, new Vector2Int(3, 3), 60f);
 
-            // --- переход обратно в овраг (юг). Из оврага сюда ведёт портал с TargetEntrance = "from_ravine"
-            ZoneGateBuilder.Build(gameplay, RavineGate, 0f, targetZone: "ravine", targetEntrance: "from_forest",
-                localEntranceId: "from_ravine", style: ZoneGateBuilder.Style.Descent);
+            // --- переход обратно в овраг (северный край, проход смотрит на юг — прямо в камеру, как в овраге).
+            // Из оврага сюда ведёт портал с TargetEntrance = "from_ravine". Не на южном краю: камера смотрит
+            // с юга, и заросли прохода закрывали бы героя.
+            ZoneGateBuilder.Build(gameplay, RavineGate, 180f, targetZone: "ravine", targetEntrance: "from_forest",
+                localEntranceId: "from_ravine", style: ZoneGateBuilder.Style.Thicket, wallHalfWidth: 7f);
 
             AtmosphereBuilder.EndBuild();
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -79,8 +81,21 @@ namespace Game.Editor
             Debug.Log($"[Game] Сцена собрана: {ScenePath}. Жми Play!");
         }
 
-        /// <summary>Где стоит арка спуска в овраг (южный край леса).</summary>
-        private static readonly Vector3 RavineGate = new(0f, 0f, -37f);
+        /// <summary>Где проход в овраг (северо-западный край леса, проход смотрит на юг, в лес).</summary>
+        private static readonly Vector3 RavineGate = new(-22f, 0f, 37f);
+
+        /// <summary>Площадка перед проходом в овраг и тропа к нему от лагеря — без деревьев (и краевых тоже).</summary>
+        private static bool IsGateReserved(Vector3 p)
+        {
+            // площадка перед проходом (лес сзади прохода сажаем — это фон зарослей)
+            if (Mathf.Abs(p.x - RavineGate.x) < 6.5f && p.z > RavineGate.z - 9f && p.z < RavineGate.z + 4f) return true;
+            // тропа от лагеря к проходу
+            var a = new Vector2(0f, 6f);
+            var b = new Vector2(RavineGate.x, RavineGate.z - 5f);
+            var q = new Vector2(p.x, p.z);
+            float k = Mathf.Clamp01(Vector2.Dot(q - a, b - a) / (b - a).sqrMagnitude);
+            return Vector2.Distance(q, a + (b - a) * k) < 3f;
+        }
 
         // ------------------------------------------------------------------ окружение
 
@@ -214,6 +229,7 @@ namespace Game.Editor
             {
                 var p = new Vector3(Range(-46f, 46f), 0f, Range(-46f, 46f));
                 bool edge = Mathf.Abs(p.x) > 36f || Mathf.Abs(p.z) > 36f;
+                if (IsGateReserved(p)) continue; // у прохода в овраг свои заросли (ZoneGateBuilder)
                 if (!edge)
                 {
                     // реже внутри, и не на лагере/тропе/логовах
@@ -262,7 +278,7 @@ namespace Game.Editor
             if (Vector3.Distance(p, new Vector3(-15f, 0f, 14f)) < denRadius) return true;
             if (Vector3.Distance(p, new Vector3(14f, 0f, 16f)) < denRadius) return true;
             if (Vector3.Distance(p, new Vector3(0f, 0f, 31f)) < denRadius + 1f) return true;
-            if (Mathf.Abs(p.x - RavineGate.x) < 6f && p.z < RavineGate.z + 9f) return true; // проход к оврагу
+            if (IsGateReserved(p)) return true; // проход к оврагу
             return false;
         }
 

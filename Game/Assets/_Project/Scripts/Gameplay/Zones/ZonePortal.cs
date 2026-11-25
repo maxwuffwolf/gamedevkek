@@ -28,6 +28,8 @@ namespace Game.Gameplay.Zones
         [Tooltip("Подпись с названием зоны над порталом")]
         public bool ShowLabel = true;
         public float LabelHeight = 4.4f;
+        [Tooltip("Подпись видна только при наведении курсора (как в PoE: проход — часть пейзажа, пока на него не навели)")]
+        public bool LabelOnHoverOnly;
 
         private WorldLabel _label;
 
@@ -49,6 +51,14 @@ namespace Game.Gameplay.Zones
             if (ShowLabel)
                 _label = WorldLabel.Create(transform, new Vector3(0f, LabelHeight, 0f), LabelText, new Color(0.75f, 0.85f, 1f), 0.4f);
             EventBus.Subscribe<ContentReloadedEvent>(OnContentReloaded);
+        }
+
+        private void Update()
+        {
+            if (!LabelOnHoverOnly || _label == null) return;
+            var pc = Game.Gameplay.World.GameWorld.PlayerController;
+            bool hovered = pc != null && ReferenceEquals(pc.Hovered, this);
+            if (_label.gameObject.activeSelf != hovered) _label.gameObject.SetActive(hovered);
         }
 
         private void OnDestroy() => EventBus.Unsubscribe<ContentReloadedEvent>(OnContentReloaded);
