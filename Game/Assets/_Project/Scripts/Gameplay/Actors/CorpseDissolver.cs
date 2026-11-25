@@ -8,7 +8,7 @@ namespace Game.Gameplay.Actors
     /// <summary>
     /// Труп падает на бок, ждёт и растворяется (прозрачность + подъём + сжатие), затем удаляется.
     /// Модели со своей анимацией смерти (Animator с триггером Die, напр. гуль) не опрокидываются и не
-    /// перекрашиваются: лежат, как упали, а потом уходят в землю.
+    /// перекрашиваются: лежат, как упали, а потом рассыпаются пеплом (шейдер Character Toon, _Dissolve).
     /// </summary>
     public sealed class CorpseDissolver : MonoBehaviour
     {
@@ -29,17 +29,25 @@ namespace Game.Gameplay.Actors
             return false;
         }
 
-        private IEnumerator SinkIntoGround(float delay, float duration)
+        private static readonly int DissolveId = Shader.PropertyToID("_Dissolve");
+
+        /// <summary>Тело лежит, как упало, потом рассыпается пеплом с тлеющей кромкой (Character Toon _Dissolve).</summary>
+        private IEnumerator CrumbleToAsh(float delay, float duration)
         {
-            yield return new WaitForSeconds(delay + 0.8f); // + время самой анимации падения
-            foreach (var r in GetComponentsInChildren<Renderer>())
-                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            Vector3 startPos = transform.position;
-            Vector3 startScale = transform.localScale;
-            for (float t = 0f; t < 1f; t += Time.deltaTime / Mathf.Max(0.1f, duration * 1.5f))
+            yield return new WaitForSeconds(delay + 1.2f); // + время самой анимации падения
+            var renderers = GetComponentsInChildren<Renderer>();
+            var block = new MaterialPropertyBlock();
+            float len = Mathf.Max(0.3f, duration * 1.4f);
+            for (float t = 0f; t < 1f; t += Time.deltaTime / len)
             {
-                transform.position = startPos + Vector3.down * (0.7f * t * t);
-                transform.localScale = startScale * (1f - 0.25f * t);
+                float k = Mathf.SmoothStep(0f, 1f, t);
+                foreach (var r in renderers)
+                {
+                    if (r == null) continue;
+                    r.GetPropertyBlock(block);
+                    block.SetFloat(DissolveId, k);
+                    r.SetPropertyBlock(block);
+                }
                 yield return null;
             }
             Destroy(gameObject);
@@ -49,7 +57,7 @@ namespace Game.Gameplay.Actors
         {
             if (HasDeathAnimation(model))
             {
-                yield return SinkIntoGround(delay, duration);
+                yield return CrumbleToAsh(delay, duration);
                 yield break;
             }
             if (model != null)

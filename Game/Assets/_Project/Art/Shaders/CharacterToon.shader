@@ -52,6 +52,10 @@ Shader "Game/Character Toon"
         [HDR] _EmissionColor ("Emission", Color) = (0, 0, 0, 1)
         _EmissionFromAlbedo ("Emission from albedo (glowing eyes, spores)", Range(0, 8)) = 0
 
+        [Header(Dissolve (corpse crumbles to ash))]
+        _Dissolve ("Dissolve", Range(0, 1)) = 0
+        [HDR] _DissolveEdgeColor ("Dissolve edge", Color) = (3, 1.1, 0.35, 1)
+
         [Header(Render)]
         [Enum(UnityEngine.Rendering.CullMode)] _Cull ("Cull", Float) = 2
     }
@@ -90,8 +94,42 @@ Shader "Game/Character Toon"
             half _EyeGlow;
             half4 _EmissionColor;
             half _EmissionFromAlbedo;
+            half _Dissolve;
+            half4 _DissolveEdgeColor;
             half _Cull;
         CBUFFER_END
+
+        // растворение трупа: пятна по 3D-шуму мировой позиции (труп неподвижен — узор не плывёт)
+        float DissolveHash(float3 p)
+        {
+            p = frac(p * 0.3183099 + 0.1);
+            p *= 17.0;
+            return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
+        }
+
+        float DissolveNoise(float3 p)
+        {
+            float3 i = floor(p);
+            float3 f = frac(p);
+            f = f * f * (3.0 - 2.0 * f);
+            float a = lerp(lerp(DissolveHash(i), DissolveHash(i + float3(1, 0, 0)), f.x),
+                           lerp(DissolveHash(i + float3(0, 1, 0)), DissolveHash(i + float3(1, 1, 0)), f.x), f.y);
+            float b = lerp(lerp(DissolveHash(i + float3(0, 0, 1)), DissolveHash(i + float3(1, 0, 1)), f.x),
+                           lerp(DissolveHash(i + float3(0, 1, 1)), DissolveHash(i + float3(1, 1, 1)), f.x), f.y);
+            return lerp(a, b, f.z);
+        }
+
+        /// > 0 — пиксель ещё есть; < 0 — рассыпался. Около нуля — тлеющая кромка.
+        float DissolveMask(float3 positionWS)
+        {
+            float n = DissolveNoise(positionWS * 9.0) * 0.65 + DissolveNoise(positionWS * 23.0 + 5.3) * 0.35;
+            return n - _Dissolve * 1.08;
+        }
+
+        void DissolveClip(float3 positionWS)
+        {
+            if (_Dissolve > 0.001) clip(DissolveMask(positionWS));
+        }
         ENDHLSL
 
         Pass
@@ -202,6 +240,12 @@ Shader "Game/Character Toon"
                 #endif
 
                 half3 emission = _EmissionColor.rgb + albedo * _EmissionFromAlbedo;
+                if (_Dissolve > 0.001)
+                {
+                    float dm = DissolveMask(input.positionWS);
+                    clip(dm);
+                    emission += _DissolveEdgeColor.rgb * (1.0 - smoothstep(0.0, 0.07, dm));
+                }
 
                 #if defined(_EYES)
                     // радужка: яркость из текстуры × цвет глаза; R цвета вершин выбирает глаз
@@ -291,7 +335,7 @@ Shader "Game/Character Toon"
             #pragma multi_compile_instancing
 
             struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct Varyings { float4 positionCS : SV_POSITION; half fogFactor : TEXCOORD0; };
+            struct Varyings { float4 positionCS : SV_POSITION; half fogFactor : TEXCOORD0; float3 positionWS : TEXCOORD1; };
 
             Varyings OutlineVert(Attributes input)
             {
@@ -307,11 +351,13 @@ Shader "Game/Character Toon"
                 posCS.xy += dir * _OutlineWidth * (_ScreenParams.y / 1080.0) * ndcPerPixel * posCS.w;
                 o.positionCS = _OutlineWidth > 0.001 ? posCS : float4(0, 0, -2, 1); // выключен — выносим за ближнюю плоскость
                 o.fogFactor = ComputeFogFactor(posCS.z);
+                o.positionWS = TransformObjectToWorld(input.positionOS.xyz);
                 return o;
             }
 
             half4 OutlineFrag(Varyings input) : SV_Target
             {
+                DissolveClip(input.positionWS);
                 return half4(MixFog(_OutlineColor.rgb, input.fogFactor), 1);
             }
             ENDHLSL
@@ -338,7 +384,7 @@ Shader "Game/Character Toon"
             float3 _LightPosition;
 
             struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct Varyings { float4 positionCS : SV_POSITION; };
+            struct Varyings { float4 positionCS : SV_POSITION; float3 positionWS : TEXCOORD0; };
 
             Varyings ShadowVert(Attributes input)
             {
@@ -352,10 +398,11 @@ Shader "Game/Character Toon"
                     float3 lightDirectionWS = _LightDirection;
                 #endif
                 o.positionCS = ApplyShadowClamping(TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, lightDirectionWS)));
+                o.positionWS = positionWS;
                 return o;
             }
 
-            half4 ShadowFrag(Varyings input) : SV_Target { return 0; }
+            half4 ShadowFrag(Varyings input) : SV_Target { DissolveClip(input.positionWS); return 0; }
             ENDHLSL
         }
 
@@ -373,15 +420,16 @@ Shader "Game/Character Toon"
             #pragma fragment DepthFrag
             #pragma multi_compile_instancing
             struct Attributes { float4 positionOS : POSITION; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct Varyings { float4 positionCS : SV_POSITION; };
+            struct Varyings { float4 positionCS : SV_POSITION; float3 positionWS : TEXCOORD0; };
             Varyings DepthVert(Attributes input)
             {
                 Varyings o;
                 UNITY_SETUP_INSTANCE_ID(input);
                 o.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                o.positionWS = TransformObjectToWorld(input.positionOS.xyz);
                 return o;
             }
-            half DepthFrag(Varyings input) : SV_Target { return input.positionCS.z; }
+            half DepthFrag(Varyings input) : SV_Target { DissolveClip(input.positionWS); return input.positionCS.z; }
             ENDHLSL
         }
 
@@ -399,17 +447,19 @@ Shader "Game/Character Toon"
             #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
             #pragma multi_compile_instancing
             struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct Varyings { float4 positionCS : SV_POSITION; float3 normalWS : TEXCOORD0; };
+            struct Varyings { float4 positionCS : SV_POSITION; float3 normalWS : TEXCOORD0; float3 positionWS : TEXCOORD1; };
             Varyings NormalsVert(Attributes input)
             {
                 Varyings o;
                 UNITY_SETUP_INSTANCE_ID(input);
                 o.positionCS = TransformObjectToHClip(input.positionOS.xyz);
                 o.normalWS = TransformObjectToWorldNormal(input.normalOS);
+                o.positionWS = TransformObjectToWorld(input.positionOS.xyz);
                 return o;
             }
             half4 NormalsFrag(Varyings input) : SV_Target
             {
+                DissolveClip(input.positionWS);
                 #if defined(_GBUFFER_NORMALS_OCT)
                     float3 n = normalize(input.normalWS);
                     float2 oct = saturate(PackNormalOctQuadEncode(n) * 0.5 + 0.5);
