@@ -272,9 +272,8 @@ Shader "Game/Ground Toon"
                 float ashRing = smoothstep(0.55, 0.85, r) * (1.0 - smoothstep(0.95, 1.25, r));
                 half3 ash = _AshColor.rgb * (0.75 + 0.35 * fine) * lerp(0.8, 1.05, Fbm(p * 1.3));
                 // плиты оплавленного базальта: крупные к центру, мельче к краю
-                float plateScale = lerp(0.9, 1.9, saturate(r));
                 float2 warp = float2(ValueNoise(p * 1.7), ValueNoise(p * 1.7 + 5.5)) - 0.5;
-                CellInfo pl = Cells(p * plateScale + warp * 0.6);
+                CellInfo pl = Cells(p * 1.15 + warp * 0.6);                   // одинаковый масштаб: иначе Вороной «закручивается» в кольца
                 half tone = 0.75 + 0.5 * pl.id;
                 half3 plate = lerp(_CharColor.rgb, _CharColor2.rgb, pl.id) * tone;
                 half bev = PaintedBevel(pl, 0.22);
@@ -286,26 +285,26 @@ Shader "Game/Ground Toon"
                 c = lerp(c, ash, ashRing * (1.0 - bowl) * 0.8);
 
                 // светящиеся швы между плитами: широкие и яркие в центре, тонкие и тусклые к краю
-                float heat = (1.0 - smoothstep(0.05, 0.85, r)) * _Heat;
-                float seamW = lerp(0.16, 0.035, saturate(r));
+                float heat = (1.0 - smoothstep(0.05, 0.6, r)) * _Heat;
+                float seamW = lerp(0.1, 0.03, saturate(r * 1.4));
                 float seam = 1.0 - smoothstep(0.0, seamW, pl.d2 - pl.d1);
                 float pulse = 0.78 + 0.22 * sin(t * 2.0 + pl.id * 12.0 + dist * 0.8);
                 c = lerp(c, c * 0.35, seam * bowl);                           // шов — тёмная щель
-                emission += _MagmaColor.rgb * seam * heat * pulse;
+                emission += _MagmaColor.rgb * seam * heat * pulse * 0.8;
 
                 // радиальные разломы от центра, извилистые, разной длины
-                float sectors = 11.0;
+                float sectors = 7.0;
                 float a01 = ang / 6.28318 * sectors + (Fbm(float2(dist * 0.5, ang * 2.0)) - 0.5) * 0.9;
                 float sid = round(a01);                                  // разлом идёт по границе секторов
-                float len = lerp(0.55, 1.35, Hash21(float2(sid, 7.0)));
+                float len = lerp(0.4, 0.95, Hash21(float2(sid, 7.0)));
                 float ad = abs(a01 - sid) / sectors * 6.28318 * dist;      // расстояние до линии разлома, м
-                float fissure = (1.0 - smoothstep(0.0, lerp(0.14, 0.03, saturate(r / len)), ad))
+                float fissure = (1.0 - smoothstep(0.0, lerp(0.09, 0.02, saturate(r / len)), ad))
                               * (1.0 - smoothstep(len * 0.7, len, r)) * smoothstep(0.1, 0.22, r);
                 c = lerp(c, _CrackColor.rgb * 0.6, fissure * 0.9);
-                emission += _MagmaColor.rgb * fissure * (1.0 - smoothstep(0.0, len, r)) * 1.6 * _Heat * pulse;
+                emission += _MagmaColor.rgb * fissure * (1.0 - smoothstep(0.0, len, r)) * 1.1 * _Heat * pulse;
 
                 // раскалённое ядро — место удара
-                float core = 1.0 - smoothstep(0.0, 0.2, r);
+                float core = 1.0 - smoothstep(0.0, 0.14, r);
                 c = lerp(c, c * 0.5, core);
                 emission += _CoreColor.rgb * core * core * (0.85 + 0.15 * sin(t * 3.1)) * _Heat;
 
@@ -326,14 +325,14 @@ Shader "Game/Ground Toon"
 
                 // положение поперёк ущелья: 0 — середина, 1 — у стены (та же форма, что в RavineSceneBuilder)
                 float cx = _PathOffsetX + _PathAmp * sin(p.y * _PathFreq);
-                float halfW = _RavineWidth.x + _RavineWidth.y * sin(p.y * _RavineWidth.z + _RavineWidth.w);
+                float halfW = _RavineWidth.x > 0.0 ? _RavineWidth.x + _RavineWidth.y * sin(p.y * _RavineWidth.z + _RavineWidth.w) : 1000.0;
                 if (_CraterRadius > 0.0) halfW = max(halfW, _CraterRadius * 1.91 - abs(p.y - _CraterCenter.y) * 0.45); // чаша у кратера (= HalfWidth)
                 float across = saturate(abs(p.x - cx) / max(halfW, 1.0) + (mid - 0.5) * 0.25);
                 float wall = smoothstep(_WallBand, 1.0, across);
 
                 // земля: комья с нарисованной фаской, два оттенка крупными пятнами
                 float2 cw = float2(ValueNoise(p * 2.1), ValueNoise(p * 2.1 + 3.3)) - 0.5;
-                CellInfo clod = Cells(p * _ClodScale + cw * 0.7);
+                CellInfo clod = Cells(p * max(_ClodScale, 0.5) + cw * 0.7);
                 half3 c = lerp(_DirtColor.rgb, _DirtColor2.rgb, smoothstep(0.35, 0.7, mid));
                 c *= 0.88 + 0.22 * clod.id;
                 c *= 1.0 + PaintedBevel(clod, 0.18) * _Bevel * 0.45;

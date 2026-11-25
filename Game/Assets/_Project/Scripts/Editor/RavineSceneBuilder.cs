@@ -150,6 +150,24 @@ namespace Game.Editor
             var cc = Floor(CraterZ);
             m.SetVector("_CraterCenter", new Vector4(cc.x, cc.z, 0f, 0f));
             m.SetFloat("_CraterRadius", CraterRadius);
+            // Новые параметры шейдера задаём явно при каждой пересборке: у материала, созданного старой версией
+            // шейдера, их нет, и Unity подставляет нули (огромные «комья» на всю землю, чёрная земля у стен).
+            m.SetFloat("_NoiseScale", 0.16f);
+            m.SetFloat("_ClodScale", 1.6f);
+            m.SetFloat("_Bevel", 0.5f);
+            m.SetFloat("_MossAmount", 0.5f);
+            m.SetFloat("_WallBand", 0.62f);
+            m.SetColor("_DampColor", new Color(0.19f, 0.17f, 0.2f));
+            m.SetColor("_CharColor", new Color(0.13f, 0.11f, 0.14f));
+            m.SetColor("_CharColor2", new Color(0.2f, 0.16f, 0.18f));
+            m.SetColor("_AshColor", new Color(0.36f, 0.33f, 0.38f));
+            m.SetColor("_MagmaColor", new Color(2.2f, 0.6f, 0.14f));
+            m.SetColor("_CoreColor", new Color(2.6f, 1.3f, 0.5f));
+            m.SetFloat("_Heat", 0.8f);
+            m.SetFloat("_PulseSpeed", 1.3f);
+            m.SetFloat("_Steps", 2f);
+            m.SetFloat("_StepSmooth", 0.06f);
+            m.SetFloat("_PointSmooth", 1f);
             m.SetFloat("_PathZMax", ExitZ + 10f);
             if (created || AtmosphereBuilder.RefreshAssets)
             {
@@ -583,6 +601,33 @@ namespace Game.Editor
             // мелкие камешки у вала
             for (int i = 0; i < 6; i++)
                 Put(kit.Pebbles, root, c + Quaternion.Euler(0f, Range(40f, 320f), 0f) * Vector3.forward * Range(5f, 6.5f), Range(1f, 1.4f));
+
+            // за валом, в пепле: россыпь опалённых обломков группами по 2–3 (выброшены ударом), проход на север свободен
+            var scorched = ShowcaseSceneBuilder.Mat("ScorchedStone", new Color(0.24f, 0.21f, 0.24f));
+            for (int i = 0; i < 10 && kit.Rocks.Length > 0; i++)
+            {
+                float a = i * 36f + Range(-12f, 12f);
+                if (Mathf.Abs(Mathf.DeltaAngle(a, 0f)) < 28f) continue;
+                var at = c + Quaternion.Euler(0f, a, 0f) * Vector3.forward * Range(7.2f, 9.2f);
+                if (Mathf.Abs(Across(at)) > 0.9f) continue;
+                for (int k = _rng.Next(1, 4); k > 0; k--)
+                {
+                    var rock = PlacePrefab(root, kit.Rocks, at + new Vector3(Range(-0.7f, 0.7f), 0f, Range(-0.7f, 0.7f)), 0.18f, 0.4f);
+                    foreach (var r in rock.GetComponentsInChildren<Renderer>()) r.sharedMaterial = scorched;
+                    foreach (var col in rock.GetComponentsInChildren<Collider>()) col.enabled = false;
+                }
+                if (_rng.NextDouble() < 0.5) Put(PickOf(kit.StickA, kit.StickB), root, Around(at, 0.4f, 0.9f), Range(1f, 1.4f), recolor: kit.Charred);
+            }
+            // дальше — первая сухая трава: жизнь начинается там, где кончается пепел
+            for (int i = 0; i < 14; i++)
+            {
+                float a = Range(30f, 330f);
+                var at = c + Quaternion.Euler(0f, a, 0f) * Vector3.forward * Range(9.5f, 11.5f);
+                float ac = Across(at);
+                if (Mathf.Abs(ac) > 0.95f || Mathf.Abs(ac) < 0.3f) continue;
+                for (int k = _rng.Next(2, 4); k > 0; k--)
+                    Put(kit.GrassTall, root, at + new Vector3(Range(-0.5f, 0.5f), 0f, Range(-0.5f, 0.5f)), Range(0.8f, 1.1f), recolor: kit.Dry);
+            }
         }
 
         private static void CrystalCluster(Transform parent, Kit kit, Vector3 p, bool gold, float scale, bool light)
@@ -765,18 +810,27 @@ namespace Game.Editor
             for (int sideI = 0; sideI < 2; sideI++)
             {
                 float side = sideI == 0 ? -1f : 1f;
-                float z = FallenStartZ + Range(0f, 2f);
+                float z = ZMin + 3f + Range(0f, 2f);
                 float nextRoots = z + Range(3f, 6f);
                 while (z < ExitZ - 7f)
                 {
                     var chapter = ChapterAt(z);
                     float step = chapter switch { Chapter.Fallen => Range(3.5f, 5.5f), Chapter.Grove => Range(2.4f, 3.4f), _ => Range(1.8f, 2.6f) };
                     var p = Floor(z, side * Range(0.86f, 0.97f));
-                    bool busy = Reserved(p, side * 0.9f) || NearVignette(p);
+                    bool busy = (chapter != Chapter.Ashes && Reserved(p, side * 0.9f)) || NearVignette(p)
+                                || Vector3.Distance(p, Floor(CraterZ)) < CraterRadius * 1.3f;
                     if (!busy && _rng.NextDouble() > 0.18)
                     {
                         switch (chapter)
                         {
+                            case Chapter.Ashes:
+                                // у кратера всё опалено: камни, обугленные ветки, редкая сухая трава
+                                if (kit.Rocks.Length > 0) PlacePrefab(root, kit.Rocks, p, 0.5f, 0.85f);
+                                if (_rng.NextDouble() < 0.6)
+                                    Put(PickOf(kit.StickA, kit.StickB), root, p - Vector3.right * side * Range(0.6f, 1.1f), Range(1.1f, 1.5f), recolor: kit.Charred);
+                                else
+                                    Put(kit.GrassTall, root, p - Vector3.right * side * Range(0.5f, 0.9f), Range(0.8f, 1.1f), recolor: kit.Dry);
+                                break;
                             case Chapter.Fallen:
                                 if (kit.Rocks.Length > 0 && _rng.NextDouble() < 0.5) PlacePrefab(root, kit.Rocks, p, 0.6f, 0.9f);
                                 Put(kit.GrassTall, root, p - Vector3.right * side * Range(0.5f, 0.9f), Range(0.9f, 1.2f), recolor: kit.Dry);
@@ -798,7 +852,8 @@ namespace Game.Editor
                         var rp = Floor(z, side * Range(0.93f, 1f));
                         if (!Reserved(Floor(z, side * 0.85f), side * 0.85f) && !NearVignette(rp))
                             Put(_rng.NextDouble() < 0.5 && kit.RootsBig != null ? kit.RootsBig : kit.RootsSmall, root, rp,
-                                (side > 0 ? 270f : 90f) + Range(-40f, 40f), Range(1.1f, 1.6f), shadows: true);
+                                Range(1.1f, 1.6f), (side > 0 ? 270f : 90f) + Range(-40f, 40f), shadows: true,
+                                recolor: ChapterAt(z) == Chapter.Ashes ? kit.Charred : null);
                     }
                     z += step;
                 }
