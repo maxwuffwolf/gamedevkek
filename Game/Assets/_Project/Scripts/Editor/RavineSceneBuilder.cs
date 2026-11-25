@@ -48,6 +48,7 @@ namespace Game.Editor
             var gameplay = new GameObject("Gameplay").transform;
 
             HeroBuilder.ApplyReadability();
+            GhoulBuilder.BuildIfPresent(); // падальщики на модели гуля, если Mon_Ghoul.fbx уже в проекте
             AtmosphereBuilder.BuildLighting(env); // те же сумерки, что в лесу: зоны должны выглядеть одним миром
             ShowcaseSceneBuilder.BuildCamera();
 

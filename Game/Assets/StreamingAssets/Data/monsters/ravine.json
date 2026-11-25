@@ -1,5 +1,5 @@
 {
-  "_comment": "Мобы оврага (стартовая зона). Падальщики — первые враги после падения героя.",
+  "_comment": "Мобы оврага (стартовая зона). Падальщики — гули сумеречного леса, первые враги после падения героя. Модель: Tools/Blender/ghoul_build.py → ActorVisual \"scavenger\" (без неё — заглушка из placeholder).",
   "monsters": [
     {
       "id": "scavenger", "name": "Падальщик", "prefab": "scavenger",
@@ -9,14 +9,14 @@
       "skills": ["scavenger_slash"],
       "aggroRange": 7, "leashRange": 16, "attackRange": 1.5, "wanderRadius": 3,
       "xp": 9, "lootTable": "scavenger",
-      "tags": ["humanoid", "scavenger"],
+      "tags": ["ghoul", "undead", "scavenger"],
       "placeholder": { "model": "humanoid", "color": "#6E5A44", "accent": "#3A3128", "scale": 0.9 },
       "corpseSeconds": 2.5
     }
   ],
   "skills": [
     {
-      "id": "scavenger_slash", "name": "Удар заточкой",
+      "id": "scavenger_slash", "name": "Удар когтями",
       "behavior": "Melee", "cooldown": 1.1, "damageMultiplier": 1.0,
       "shape": { "type": "Arc", "radius": 1.9, "angle": 100 },
       "duration": 0.8, "hitFrame": 0.55, "usesAttackSpeed": true, "moveWhileCasting": 0,

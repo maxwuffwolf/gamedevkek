@@ -50,6 +50,7 @@ Shader "Game/Character Toon"
 
         [Header(Emission)]
         [HDR] _EmissionColor ("Emission", Color) = (0, 0, 0, 1)
+        _EmissionFromAlbedo ("Emission from albedo (glowing eyes, spores)", Range(0, 8)) = 0
 
         [Header(Render)]
         [Enum(UnityEngine.Rendering.CullMode)] _Cull ("Cull", Float) = 2
@@ -88,6 +89,7 @@ Shader "Game/Character Toon"
             half4 _EyeLeft;
             half _EyeGlow;
             half4 _EmissionColor;
+            half _EmissionFromAlbedo;
             half _Cull;
         CBUFFER_END
         ENDHLSL
@@ -199,7 +201,7 @@ Shader "Game/Character Toon"
                     albedo *= input.color.rgb;
                 #endif
 
-                half3 emission = _EmissionColor.rgb;
+                half3 emission = _EmissionColor.rgb + albedo * _EmissionFromAlbedo;
 
                 #if defined(_EYES)
                     // радужка: яркость из текстуры × цвет глаза; R цвета вершин выбирает глаз
