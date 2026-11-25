@@ -27,7 +27,9 @@
         "balance": 0.5, "crystalGlow": 1.6, "crystalLight": "#FFB838", "crystalDark": "#8C3CFF",
         "absorbRadius": 14,
         "weapons": { "sword_rusty": "Wpn_Sword_Rusty" },
-        "defaultWeapon": "Wpn_Sword_Rusty"
+        "defaultWeapon": "Wpn_Sword_Rusty",
+        "_weaponGripComment": "Поворот меча в кисти (градусы X, Y, Z). Подбирается вживую командой консоли grip x y z, потом сюда.",
+        "weaponGrip": [0, 0, 0]
       }
     }
   ]

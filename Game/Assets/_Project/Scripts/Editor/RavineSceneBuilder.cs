@@ -24,6 +24,8 @@ namespace Game.Editor
         /// <summary>Скелет между тропой и левой стеной — на открытом месте, не в камнях у обрыва.</summary>
         private static Vector3 SkeletonPos => Floor(SkeletonZ, -0.45f);
         private const float ExitZ = 42f;
+        /// <summary>Радиус чаши кратера (шейдер земли рисует плиты до него, пепел и лучи — до ~2 радиусов).</summary>
+        private const float CraterRadius = 5.5f;
 
         private static System.Random _rng;
 
@@ -55,12 +57,7 @@ namespace Game.Editor
             BuildFloor(env);
             BuildCliffs(env);
             BuildCrater(env);
-            BuildDebris(env);
-            BuildGlowShrooms(env);
-            BuildCrystals(env);
-            BuildGlowFlowers(env);
-            BuildGroundDetail(env);
-            BuildForestDetails(env, gameplay);
+            BuildDressing(env, gameplay); // вся детализация — по «главам» ущелья, см. ниже
             // частицы (светлячки, пылинки, дымка) только над ущельем: так они гуще там, где их видно
             AtmosphereBuilder.BuildEffects(env, _rng, new Vector3(0f, 0f, 0f), new Vector2(28f, ZMax - ZMin));
 
@@ -147,7 +144,12 @@ namespace Game.Editor
             m.SetFloat("_PathFreq", 0.055f);
             m.SetFloat("_PathOffsetX", 0f);
             m.SetFloat("_PathWidth", 1.5f);
-            m.SetFloat("_PathZMin", CraterZ + 4f);
+            m.SetFloat("_PathZMin", CraterZ + CraterRadius + 1f); // тропа начинается за валом кратера
+            // форма ущелья (= HalfWidth) и кратер
+            m.SetVector("_RavineWidth", new Vector4(6.5f, 1.8f, 0.13f, 1.3f));
+            var cc = Floor(CraterZ);
+            m.SetVector("_CraterCenter", new Vector4(cc.x, cc.z, 0f, 0f));
+            m.SetFloat("_CraterRadius", CraterRadius);
             m.SetFloat("_PathZMax", ExitZ + 10f);
             if (created || AtmosphereBuilder.RefreshAssets)
             {
@@ -233,34 +235,30 @@ namespace Game.Editor
             Vector3 c = Floor(CraterZ);
             root.position = c;
 
-            ShowcaseSceneBuilder.Prop(PrimitiveType.Cylinder, root, "Scorch", c + Vector3.up * 0.01f, new Vector3(11f, 0.01f, 11f),
-                ShowcaseSceneBuilder.Mat("Scorch", new Color(0.11f, 0.09f, 0.1f)), keepCollider: false);
-            ShowcaseSceneBuilder.Prop(PrimitiveType.Cylinder, root, "ImpactGlow", c + Vector3.up * 0.016f, new Vector3(2.4f, 0.01f, 2.4f),
-                ShowcaseSceneBuilder.UnlitMat("ImpactGlow", new Color(1.25f, 0.48f, 0.16f)), keepCollider: false);
-
-            // раскалённые трещины от центра
-            var crackMat = ShowcaseSceneBuilder.UnlitMat("Crack", new Color(1.05f, 0.36f, 0.1f));
-            for (int i = 0; i < 9; i++)
+            // сам кратер (плиты, светящиеся швы, пепел, лучи выброса) рисует шейдер земли — см. GroundMaterial.
+            // Здесь только объём: вал из выброшенных обломков, с проходом на север.
+            var rimMat = ShowcaseSceneBuilder.Mat("ScorchedStone", new Color(0.24f, 0.21f, 0.24f));
+            var rockPrefabs = EnvironmentPrefabs.Load("Rock");
+            for (int i = 0; i < 16; i++)
             {
-                float yaw = i * 40f + Range(-12f, 12f);
-                float len = Range(2f, 4.5f);
-                Vector3 dir = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
-                var crack = ShowcaseSceneBuilder.Prop(PrimitiveType.Cube, root, "Crack", c + dir * (len * 0.5f + 0.8f) + Vector3.up * 0.02f,
-                    new Vector3(Range(0.08f, 0.16f), 0.02f, len), crackMat, keepCollider: false);
-                crack.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
-            }
-
-            // вал из выброшенных камней, с проходом на север
-            var rimMat = ShowcaseSceneBuilder.Mat("ScorchedStone", new Color(0.23f, 0.21f, 0.23f));
-            for (int i = 0; i < 18; i++)
-            {
-                float a = i * 20f + Range(-6f, 6f);
-                if (Mathf.Abs(Mathf.DeltaAngle(a, 0f)) < 28f) continue; // проход
+                float a = i * 22.5f + Range(-7f, 7f);
+                if (Mathf.Abs(Mathf.DeltaAngle(a, 0f)) < 30f) continue; // проход
                 Vector3 dir = Quaternion.Euler(0f, a, 0f) * Vector3.forward;
-                var s = new Vector3(Range(1f, 2f), Range(0.6f, 1.4f), Range(1f, 1.8f));
-                var rock = ShowcaseSceneBuilder.Prop(PrimitiveType.Cube, root, "RimRock", c + dir * Range(5.2f, 6.2f) + Vector3.up * s.y * 0.3f,
-                    s, rimMat, keepCollider: true);
-                rock.transform.rotation = Quaternion.LookRotation(dir) * Quaternion.Euler(Range(-25f, -10f), Range(-20f, 20f), Range(-10f, 10f));
+                var p = c + dir * Range(CraterRadius * 0.95f, CraterRadius * 1.15f);
+                GameObject rock;
+                if (rockPrefabs.Length > 0)
+                {
+                    rock = PlacePrefab(root, rockPrefabs, p, Range(0.55f, 1.0f), 1f);
+                    rock.transform.localScale = Vector3.one * Range(0.55f, 1.05f);
+                    foreach (var r in rock.GetComponentsInChildren<Renderer>()) r.sharedMaterial = rimMat;
+                }
+                else
+                {
+                    var sz = new Vector3(Range(1f, 2f), Range(0.6f, 1.4f), Range(1f, 1.8f));
+                    rock = ShowcaseSceneBuilder.Prop(PrimitiveType.Cube, root, "RimRock", p + Vector3.up * sz.y * 0.3f, sz, rimMat, keepCollider: true);
+                }
+                // обломки наклонены наружу — их выбросило ударом
+                rock.transform.rotation = Quaternion.LookRotation(dir) * Quaternion.Euler(Range(-25f, -10f), Range(-30f, 30f), Range(-10f, 10f));
             }
 
             var lightGo = new GameObject("ImpactLight");
@@ -269,11 +267,11 @@ namespace Game.Editor
             var l = lightGo.AddComponent<Light>();
             l.type = LightType.Point;
             l.color = new Color(1f, 0.55f, 0.25f);
-            l.range = 10f;
-            l.intensity = 2.4f;
+            l.range = 9f;
+            l.intensity = 2f;
             l.shadows = LightShadows.None;
             var flicker = lightGo.AddComponent<LightFlicker>();
-            flicker.BaseIntensity = 2.4f;
+            flicker.BaseIntensity = 2f;
             flicker.Amount = 0.5f;
             flicker.Speed = 3f;
 
@@ -405,71 +403,448 @@ namespace Game.Editor
             Part(PrimitiveType.Cylinder, "Arm", new Vector3(-0.28f, 0.25f, 0.05f), new Vector3(0.045f, 0.28f, 0.045f), new Vector3(60f, 0f, -30f), bone);
         }
 
-        private static void BuildDebris(Transform parent)
+        // ------------------------------------------------------------------ композиция
+        // Ущелье читается как четыре «главы» с юга на север, у каждой — свой небольшой набор деталей:
+        //   1. Пепелище (кратер): ничего живого — плиты, пепел, обугленные ветки, кристаллы-осколки по валу.
+        //   2. Привал павшего: сухая трава, камни, кости, цепочка мелких кристаллов уводит на север.
+        //   3. Грибная лощина: зелень возвращается; у стен три «сценки» со светящимися грибами (у каждой свой цвет)
+        //      и логово падальщиков.
+        //   4. Опушка: густой подлесок у стен, пни, ягоды, птицы; светящиеся колокольчики ведут к выходу.
+        // Правила: тропа (|across| < 0.3) чистая; крупное и тёмное — только у стен; мелочь не рассыпается
+        // поодиночке, а сидит группами вокруг «якоря» (камня, пня, бревна, корня).
+
+        private enum Chapter { Ashes, Fallen, Grove, Edge }
+
+        private const float FallenStartZ = CraterZ + 9f;   // -25
+        private const float GroveStartZ = SkeletonZ + 8f;  // -14
+        private const float EdgeStartZ = 13f;
+
+        private static Chapter ChapterAt(float z) =>
+            z < FallenStartZ ? Chapter.Ashes : z < GroveStartZ ? Chapter.Fallen : z < EdgeStartZ ? Chapter.Grove : Chapter.Edge;
+
+        /// <summary>Модели Det_* (Tools/Blender/forest_details.py) и камни из набора леса. Любое поле может быть null.</summary>
+        private sealed class Kit
         {
-            var root = new GameObject("Debris").transform;
-            root.SetParent(parent);
-            var rockPrefabs = EnvironmentPrefabs.Load("Rock");
-            var detailBushes = ForestDetails.LoadAll("Det_Bush_Round", "Det_Bush_Blue", "Det_Bush_Flower", "Det_Berry_Blue");
-            var bushPrefabs = detailBushes.Length > 0 ? detailBushes : EnvironmentPrefabs.Load("Bush"); // детальные кусты вместо шаров из forest_kit
-            var grassPrefabs = EnvironmentPrefabs.Load("Grass");
-            var rockMat = ShowcaseSceneBuilder.Mat("Rock", new Color(0.48f, 0.48f, 0.5f));
-            var logMat = ShowcaseSceneBuilder.Mat("DeadWood", new Color(0.33f, 0.25f, 0.2f));
+            public GameObject FernA, FernB, BushRound, BushBlue, BushFlower, BerryBlue, BerryRed;
+            public GameObject GrassTall, GrassBlue, BellsWhite, BellsPink;
+            public GameObject GlowA, GlowB, GlowTall, Toadstool, Shelf;
+            public GameObject RootsBig, RootsSmall, StickA, StickB, StickPile, Leaves, Pebbles, Stump, Log;
+            public GameObject CrystalViolet, CrystalSmall, CrystalGold;
+            public GameObject Bird, Moth, Beetle;
+            public GameObject[] Rocks;
+            public System.Collections.Generic.Dictionary<Material, Material> Charred, Dry;
+        }
 
-            for (int i = 0; i < 60; i++)
+        private static Kit LoadKit()
+        {
+            var k = new Kit
             {
-                float z = Range(ZMin + 2f, ZMax - 2f), across = Range(-0.9f, 0.9f);
-                var p = Floor(z, across);
-                if (Reserved(p, across)) continue;
-                if (rockPrefabs.Length > 0)
+                FernA = ForestDetails.Load("Det_Fern_A"), FernB = ForestDetails.Load("Det_Fern_B"),
+                BushRound = ForestDetails.Load("Det_Bush_Round"), BushBlue = ForestDetails.Load("Det_Bush_Blue"),
+                BushFlower = ForestDetails.Load("Det_Bush_Flower"),
+                BerryBlue = ForestDetails.Load("Det_Berry_Blue"), BerryRed = ForestDetails.Load("Det_Berry_Red"),
+                GrassTall = ForestDetails.Load("Det_Grass_Tall"), GrassBlue = ForestDetails.Load("Det_Grass_Blue"),
+                BellsWhite = ForestDetails.Load("Det_Flower_Bells"), BellsPink = ForestDetails.Load("Det_Flower_Bells_Pink"),
+                GlowA = ForestDetails.Load("Det_Shroom_Glow_A"), GlowB = ForestDetails.Load("Det_Shroom_Glow_B"),
+                GlowTall = ForestDetails.Load("Det_Shroom_Tall"), Toadstool = ForestDetails.Load("Det_Shroom_Toadstool"),
+                Shelf = ForestDetails.Load("Det_Shroom_Shelf"),
+                RootsBig = ForestDetails.Load("Det_Roots_Big"), RootsSmall = ForestDetails.Load("Det_Roots_Small"),
+                StickA = ForestDetails.Load("Det_Stick_A"), StickB = ForestDetails.Load("Det_Stick_B"),
+                StickPile = ForestDetails.Load("Det_Stick_Pile"), Leaves = ForestDetails.Load("Det_Leaves"),
+                Pebbles = ForestDetails.Load("Det_Pebbles"), Stump = ForestDetails.Load("Det_Stump"), Log = ForestDetails.Load("Det_Log_Mossy"),
+                CrystalViolet = ForestDetails.Load("Det_Crystal_Violet"), CrystalSmall = ForestDetails.Load("Det_Crystal_Small"),
+                CrystalGold = ForestDetails.Load("Det_Crystal_Gold"),
+                Bird = ForestDetails.Load("Det_Bird"), Moth = ForestDetails.Load("Det_Moth"), Beetle = ForestDetails.Load("Det_Beetle"),
+                Rocks = EnvironmentPrefabs.Load("Rock"),
+            };
+            k.Charred = TintedDetailMaterials("Charred", new Color(0.32f, 0.27f, 0.28f));
+            k.Dry = TintedDetailMaterials("Dry", new Color(1.15f, 0.95f, 0.55f));
+            return k;
+        }
+
+        /// <summary>
+        /// Перекрашенные копии M_Detail / M_Detail_Leaf (обугленные ветки у кратера, сухая трава у скелета):
+        /// исходный материал → копия с другим оттенком. Листва остаётся двусторонней и с ветром.
+        /// </summary>
+        private static System.Collections.Generic.Dictionary<Material, Material> TintedDetailMaterials(string suffix, Color tint)
+        {
+            var map = new System.Collections.Generic.Dictionary<Material, Material>();
+            foreach (var kv in ForestDetails.EnsureMaterials())
+            {
+                if (kv.Value == null || kv.Key == "M_Detail_Glow") continue;
+                string path = $"{ForestDetails.MaterialsDir}/{kv.Key}_{suffix}.mat";
+                var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (m == null)
                 {
-                    PlacePrefab(root, rockPrefabs, p, 0.5f, 1.2f);
-                    continue;
+                    m = new Material(kv.Value) { name = $"{kv.Key}_{suffix}" };
+                    AssetDatabase.CreateAsset(m, path);
                 }
-                float s = Range(0.4f, 1.3f);
-                var rock = ShowcaseSceneBuilder.Prop(PrimitiveType.Cube, root, "Rock", p + Vector3.up * s * 0.25f, new Vector3(s, s * 0.7f, s * 1.2f), rockMat, keepCollider: true);
-                rock.transform.rotation = Quaternion.Euler(Range(-15f, 15f), Range(0f, 360f), Range(-15f, 15f));
+                else m.CopyPropertiesFromMaterial(kv.Value);
+                m.SetColor("_BaseColor", tint);
+                EditorUtility.SetDirty(m);
+                map[kv.Value] = m;
             }
+            return map;
+        }
 
-            for (int i = 0; bushPrefabs.Length > 0 && i < 50; i++)
-            {
-                float z = Range(ZMin + 2f, ZMax - 2f), across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.6f, 0.95f);
-                var p = Floor(z, across);
-                if (!Reserved(p, across)) { if (detailBushes.Length > 0) ForestDetails.Place(detailBushes[_rng.Next(detailBushes.Length)], root, p, Range(0f, 360f), Range(1.3f, 2.0f)); else PlacePrefab(root, bushPrefabs, p, 0.7f, 1.2f); }
-            }
-            for (int i = 0; grassPrefabs.Length > 0 && i < 160; i++)
-            {
-                float z = Range(ZMin + 2f, ZMax - 2f), across = Range(-0.95f, 0.95f);
-                var p = Floor(z, across);
-                if (Vector3.Distance(p, Floor(CraterZ)) > 7f) PlacePrefab(root, grassPrefabs, p, 0.7f, 1.2f);
-            }
+        private static GameObject Put(GameObject model, Transform parent, Vector3 p, float scale, float yaw = float.NaN,
+            bool shadows = false, System.Collections.Generic.Dictionary<Material, Material> recolor = null)
+        {
+            if (model == null) return null;
+            var go = ForestDetails.Place(model, parent, p, float.IsNaN(yaw) ? Range(0f, 360f) : yaw, scale, shadows);
+            if (recolor != null)
+                foreach (var r in go.GetComponentsInChildren<Renderer>())
+                {
+                    var arr = r.sharedMaterials;
+                    for (int i = 0; i < arr.Length; i++)
+                        if (arr[i] != null && recolor.TryGetValue(arr[i], out var tinted)) arr[i] = tinted;
+                    r.sharedMaterials = arr;
+                }
+            return go;
+        }
 
-            // поваленные стволы, скатившиеся с обрыва
+        private static GameObject PickOf(params GameObject[] arr)
+        {
+            int n = 0;
+            foreach (var a in arr) if (a != null) n++;
+            if (n == 0) return null;
+            int k = _rng.Next(n);
+            foreach (var a in arr)
+                if (a != null && k-- == 0) return a;
+            return null;
+        }
+
+        /// <summary>Точка рядом с якорем (кольцо радиусом rMin..rMax), не залезающая на тропу.</summary>
+        private static Vector3 Around(Vector3 anchor, float rMin, float rMax)
+        {
             for (int i = 0; i < 6; i++)
             {
-                float z = Range(CraterZ + 9f, ExitZ - 8f), across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.55f, 0.8f);
-                var p = Floor(z, across);
-                if (Reserved(p, across)) continue;
-                var logModel = ForestDetails.Load("Det_Log_Mossy");
-                if (logModel != null)
+                var p = anchor + Quaternion.Euler(0f, Range(0f, 360f), 0f) * Vector3.forward * Range(rMin, rMax);
+                if (Mathf.Abs(Across(p)) >= 0.3f) return p;
+            }
+            return anchor;
+        }
+
+        /// <summary>Обратное к <see cref="Floor"/>: -1 у левой стены, 0 по центру, 1 у правой.</summary>
+        private static float Across(Vector3 p) => (p.x - CenterX(p.z)) / HalfWidth(p.z);
+
+        private static void BuildDressing(Transform env, Transform gameplay)
+        {
+            _glowSpots.Clear();
+            if (!ForestDetails.Available)
+            {
+                Debug.LogWarning("[Game] Нет моделей Det_*.fbx (Tools/Blender/forest_details.py) — овраг соберётся без детализации.");
+                return;
+            }
+            var kit = LoadKit();
+            var root = new GameObject("Dressing").transform;
+            root.SetParent(env);
+            Transform Group(string name)
+            {
+                var t = new GameObject(name).transform;
+                t.SetParent(root);
+                return t;
+            }
+
+            BuildCraterDressing(Group("1_Ashes"), kit);
+            BuildFallenDressing(Group("2_Fallen"), kit);
+            BuildGroveDressing(Group("3_Grove"), kit);
+            BuildEdgeDressing(Group("4_Edge"), kit);
+            BuildWallSkirt(Group("WallSkirt"), kit);
+            BuildPathPebbles(Group("PathPebbles"), kit);
+            BuildCritters(gameplay, kit);
+        }
+
+        // ---------------------------------------------------------------- 1. Пепелище
+
+        private static void BuildCraterDressing(Transform root, Kit kit)
+        {
+            var c = Floor(CraterZ);
+            // кристаллы-осколки на валу: золото и фиолет (две ветви наруча), проход на север свободен
+            for (int i = 0; i < 5; i++)
+            {
+                float a = 36f + i * 72f + Range(-10f, 10f);
+                var p = c + Quaternion.Euler(0f, a, 0f) * Vector3.forward * Range(6.6f, 7.6f);
+                CrystalCluster(root, kit, p, gold: i % 2 == 0, scale: Range(1.0f, 1.3f), light: true);
+            }
+            // обугленные ветки и пеньки, отброшенные ударом: лежат по радиусу, наружу от центра
+            for (int i = 0; i < 9; i++)
+            {
+                float a = i * 40f + Range(-12f, 12f);
+                if (Mathf.Abs(Mathf.DeltaAngle(a, 0f)) < 25f) continue;
+                var dir = Quaternion.Euler(0f, a, 0f) * Vector3.forward;
+                var p = c + dir * Range(4.2f, 6f);
+                Put(PickOf(kit.StickA, kit.StickB), root, p, Range(1.2f, 1.7f), a + Range(-20f, 20f), recolor: kit.Charred);
+            }
+            var stumpAt = c + Quaternion.Euler(0f, 250f, 0f) * Vector3.forward * 8.6f;
+            var stump = Put(kit.Stump, root, stumpAt, 1.25f, Range(0f, 360f), shadows: true, recolor: kit.Charred);
+            if (stump != null) AddCapsule(stump, 0.45f, 0.8f);
+            Put(kit.StickPile, root, Around(stumpAt, 0.8f, 1.2f), 1.1f, recolor: kit.Charred);
+            // мелкие камешки у вала
+            for (int i = 0; i < 6; i++)
+                Put(kit.Pebbles, root, c + Quaternion.Euler(0f, Range(40f, 320f), 0f) * Vector3.forward * Range(5f, 6.5f), Range(1f, 1.4f));
+        }
+
+        private static void CrystalCluster(Transform parent, Kit kit, Vector3 p, bool gold, float scale, bool light)
+        {
+            var main = gold ? kit.CrystalGold : kit.CrystalViolet;
+            if (main == null) return;
+            var cluster = new GameObject(gold ? "CrystalGold" : "CrystalViolet").transform;
+            cluster.SetParent(parent);
+            cluster.position = p;
+            _glowSpots.Add(p);
+            Put(main, cluster, p, scale * Range(1.3f, 1.6f), shadows: true);
+            for (int e = _rng.Next(1, 3); e > 0; e--)
+            {
+                var off = Quaternion.Euler(0f, Range(0f, 360f), 0f) * Vector3.forward * Range(0.7f, 1.1f) * scale;
+                Put(gold && _rng.NextDouble() < 0.5 ? kit.CrystalGold : kit.CrystalSmall, cluster, p + off, scale * Range(0.6f, 0.9f));
+            }
+            if (light)
+                AddPointLight(cluster, "CrystalLight", p + Vector3.up * 1f,
+                    gold ? new Color(1f, 0.7f, 0.35f) : new Color(0.7f, 0.4f, 1f), 4.8f * Mathf.Sqrt(scale), 1.8f, flicker: 0.2f);
+        }
+
+        // ---------------------------------------------------------------- 2. Привал павшего
+
+        private static void BuildFallenDressing(Transform root, Kit kit)
+        {
+            // цепочка мелких кристаллов от кратера на север — «след» осколков, ведёт взгляд по тропе
+            for (int i = 0; i < 6; i++)
+            {
+                float z = FallenStartZ - 1f + i * 3.2f;
+                float side = i % 2 == 0 ? 1f : -1f;
+                var p = Floor(z, side * Range(0.36f, 0.5f));
+                if (Vector3.Distance(p, SkeletonPos) < 2.5f) continue;
+                Put(kit.CrystalSmall, root, p, Range(1.1f, 1.5f) * (1f - i * 0.08f));
+            }
+
+            // скелет: вокруг — кости, сухая трава и пара камней, позади у стены — бревно
+            var s = SkeletonPos;
+            var boneMat = ShowcaseSceneBuilder.Mat("Bone", new Color(0.82f, 0.78f, 0.66f));
+            for (int i = 0; i < 4; i++)
+            {
+                var p = s + Quaternion.Euler(0f, Range(100f, 260f), 0f) * Vector3.forward * Range(1.6f, 2.4f);
+                var b = ShowcaseSceneBuilder.Prop(PrimitiveType.Capsule, root, "Bone", p + Vector3.up * 0.04f,
+                    new Vector3(0.06f, Range(0.14f, 0.22f), 0.06f), boneMat, keepCollider: false);
+                b.transform.rotation = Quaternion.Euler(90f, Range(0f, 360f), 0f);
+            }
+            for (int i = 0; i < 7; i++)
+                Put(kit.GrassTall, root, Around(s, 1.7f, 2.8f), Range(0.9f, 1.3f), recolor: kit.Dry);
+            for (int i = 0; i < 2 && kit.Rocks.Length > 0; i++)
+            {
+                var rock = PlacePrefab(root, kit.Rocks, Around(s, 2.2f, 3f), 0.35f, 0.55f);
+                foreach (var col in rock.GetComponentsInChildren<Collider>()) col.enabled = false;
+            }
+            var logAt = Floor(SkeletonZ + 3.5f, -0.82f);
+            var log = Put(kit.Log, root, logAt, 1.1f, Range(-25f, 25f), shadows: true);
+            if (log != null) AddBox(log, new Vector3(2.4f, 0.5f, 0.5f));
+            Put(kit.Shelf, root, logAt + Vector3.up * 0.1f, 1.0f);
+            Put(kit.Leaves, root, Around(logAt, 0.6f, 1.2f), 1.4f);
+
+            // напротив, у правой стены — валун с сухой травой (балансирует бревно слева)
+            var rockAt = Floor(SkeletonZ - 1.5f, 0.78f);
+            if (kit.Rocks.Length > 0) PlacePrefab(root, kit.Rocks, rockAt, 0.9f, 1.1f);
+            for (int i = 0; i < 4; i++) Put(kit.GrassTall, root, Around(rockAt, 1f, 1.6f), Range(0.9f, 1.2f), recolor: kit.Dry);
+        }
+
+        // ---------------------------------------------------------------- 3. Грибная лощина
+
+        private static void BuildGroveDressing(Transform root, Kit kit)
+        {
+            // три сценки со светящимися грибами — у каждой один цвет: бирюза, синий, фиолет
+            GlowVignette(root, kit, Floor(-9f, -0.8f), kit.GlowA, new Color(0.35f, 1f, 0.85f), anchor: kit.Stump);
+            GlowVignette(root, kit, Floor(0f, 0.8f), kit.GlowB, new Color(0.45f, 0.65f, 1f), anchor: kit.RootsBig);
+            GlowVignette(root, kit, Floor(10f, -0.78f), kit.GlowTall, new Color(0.75f, 0.45f, 1f), anchor: kit.Log);
+
+            // логово падальщиков (между сценками, у правой стены): хворост, кости, листья — тёмное и без света
+            var den = Floor(6f, 0.62f);
+            Put(kit.StickPile, root, den, 1.4f, shadows: true);
+            Put(kit.StickPile, root, Around(den, 0.9f, 1.3f), 1.1f);
+            Put(kit.Leaves, root, Around(den, 0.4f, 1f), 1.6f);
+            var boneMat = ShowcaseSceneBuilder.Mat("Bone", new Color(0.82f, 0.78f, 0.66f));
+            for (int i = 0; i < 5; i++)
+            {
+                var p = Around(den, 0.6f, 1.8f);
+                var b = ShowcaseSceneBuilder.Prop(PrimitiveType.Capsule, root, "Bone", p + Vector3.up * 0.04f,
+                    new Vector3(0.06f, Range(0.15f, 0.25f), 0.06f), boneMat, keepCollider: false);
+                b.transform.rotation = Quaternion.Euler(90f, Range(0f, 360f), 0f);
+            }
+
+            // островки синей травы между сценками
+            GrassPatches(root, kit.GrassBlue, GroveStartZ, EdgeStartZ, 6, 0.42f, 0.7f);
+        }
+
+        /// <summary>Якорь (пень/корни/бревно) + грибы одного вида + папоротники + свой цветной свет.</summary>
+        private static void GlowVignette(Transform root, Kit kit, Vector3 at, GameObject shroom, Color light, GameObject anchor)
+        {
+            var g = new GameObject("GlowVignette").transform;
+            g.SetParent(root);
+            g.position = at;
+            float side = Mathf.Sign(Across(at));
+            float yawToCenter = side > 0 ? 270f : 90f;
+            if (anchor != null)
+            {
+                var a = Put(anchor, g, at + Vector3.right * side * 0.4f, anchor == kit.RootsBig ? 1.5f : 1.15f,
+                    yawToCenter + Range(-30f, 30f), shadows: true);
+                if (anchor == kit.Stump) AddCapsule(a, 0.45f, 0.8f);
+                if (anchor == kit.Log) AddBox(a, new Vector3(2.4f, 0.5f, 0.5f));
+            }
+            // грибы — дугой со стороны тропы, крупные ближе к якорю
+            for (int i = 0; i < 4; i++)
+            {
+                float ang = yawToCenter + Range(-70f, 70f);
+                var p = at + Quaternion.Euler(0f, ang, 0f) * Vector3.forward * Range(0.7f, 1.5f);
+                Put(shroom, g, p, Range(1.0f, 1.7f) * (i == 0 ? 1.2f : 1f));
+            }
+            Put(kit.FernA, g, at + Vector3.right * side * 1.1f + Vector3.forward * Range(-1f, 1f), Range(1.6f, 2f));
+            Put(kit.FernB, g, Around(at, 1.4f, 2f), Range(1.3f, 1.7f));
+            Put(kit.Leaves, g, Around(at, 0.5f, 1.2f), 1.3f);
+            AddPointLight(g, "GlowLight", at + Vector3.up * 0.8f - Vector3.right * side * 0.6f, light, 5f, 2.2f, flicker: 0.12f);
+            _glowSpots.Add(at);
+        }
+
+        // ---------------------------------------------------------------- 4. Опушка
+
+        private static void BuildEdgeDressing(Transform root, Kit kit)
+        {
+            // бревно с грибами-трутовиками у правой стены
+            var logAt = Floor(17f, 0.8f);
+            var log = Put(kit.Log, root, logAt, 1.2f, Range(-20f, 20f), shadows: true);
+            if (log != null) AddBox(log, new Vector3(2.4f, 0.5f, 0.5f));
+            Put(kit.FernA, root, Around(logAt, 1.2f, 1.6f), 1.7f);
+
+            // пень в кольце мухоморов — «ведьмин круг» у левой стены
+            var ring = Floor(24f, -0.72f);
+            var stump = Put(kit.Stump, root, ring, 1.2f, shadows: true);
+            if (stump != null) AddCapsule(stump, 0.45f, 0.8f);
+            for (int i = 0; i < 6; i++)
+                Put(kit.Toadstool, root, ring + Quaternion.Euler(0f, i * 60f + Range(-12f, 12f), 0f) * Vector3.forward * Range(1.2f, 1.5f), Range(0.9f, 1.2f));
+
+            // ягодная полянка у правой стены
+            var berries = Floor(31f, 0.7f);
+            for (int i = 0; i < 4; i++) Put(PickOf(kit.BerryBlue, kit.BerryRed), root, Around(berries, 0.3f, 1.4f), Range(1.2f, 1.6f));
+            Put(kit.BushRound, root, berries + Vector3.right * 1.2f, 1.8f);
+
+            // светящиеся колокольчики вдоль тропы перед выходом — «маяк», куда идти
+            for (float z = ExitZ - 9f; z < ExitZ - 1.5f; z += Range(1.6f, 2.4f))
+                for (int side = -1; side <= 1; side += 2)
+                    Put(_rng.NextDouble() < 0.7 ? kit.BellsWhite : kit.BellsPink, root, Floor(z, side * Range(0.42f, 0.56f)), Range(1.2f, 1.5f));
+            _glowSpots.Add(Floor(ExitZ - 5f, 0.5f));
+            _glowSpots.Add(Floor(ExitZ - 5f, -0.5f));
+
+            GrassPatches(root, kit.GrassTall, EdgeStartZ, ExitZ - 8f, 7, 0.4f, 0.72f);
+        }
+
+        /// <summary>Трава островками по 5–8 кустиков, только одного вида на главу.</summary>
+        private static void GrassPatches(Transform root, GameObject grass, float z0, float z1, int count, float aMin, float aMax)
+        {
+            if (grass == null) return;
+            for (int i = 0; i < count; i++)
+            {
+                float z = Mathf.Lerp(z0, z1, (i + Range(0.2f, 0.8f)) / count);
+                float side = _rng.NextDouble() < 0.5 ? -1f : 1f;
+                var c = Floor(z, side * Range(aMin, aMax));
+                if (Reserved(c, Across(c))) continue;
+                for (int k = _rng.Next(5, 9); k > 0; k--)
                 {
-                    var lg = ForestDetails.Place(logModel, root, p, Range(0f, 360f), Range(0.9f, 1.25f), castShadows: true);
-                    var bc = lg.AddComponent<BoxCollider>();
-                    bc.center = new Vector3(0f, 0.25f, 0f);
-                    bc.size = new Vector3(2.4f, 0.5f, 0.5f);
-                    continue;
+                    var p = c + new Vector3(Range(-0.8f, 0.8f), 0f, Range(-0.8f, 0.8f));
+                    if (Mathf.Abs(Across(p)) < 0.3f) continue;
+                    Put(grass, root, p, Range(0.9f, 1.35f));
                 }
-                var log = ShowcaseSceneBuilder.Prop(PrimitiveType.Cylinder, root, "FallenLog", p + Vector3.up * 0.3f,
-                    new Vector3(0.55f, Range(1.6f, 2.6f), 0.55f), logMat, keepCollider: true);
-                log.transform.rotation = Quaternion.Euler(0f, Range(0f, 360f), 90f);
             }
         }
 
-        // ------------------------------------------------------------------ локальные источники света
-        // Сцена специально тёмная: глаз цепляется за яркие пятна. Каждая группа светящихся объектов
-        // даёт мягкий «бассейн» цветного света на землю и стены вокруг себя.
+        // ---------------------------------------------------------------- рамка: подлесок у стен, камешки у тропы
 
-        /// <summary>Не ставим декор на тропу, в кратер, на скелета и перед аркой.</summary>
+        /// <summary>
+        /// Непрерывная «юбка» у подножия стен — рамка, в которую вписаны сценки. Кустики идут группами
+        /// с паузами (ритм), состав зависит от главы, в кратере юбки нет.
+        /// </summary>
+        private static void BuildWallSkirt(Transform root, Kit kit)
+        {
+            for (int sideI = 0; sideI < 2; sideI++)
+            {
+                float side = sideI == 0 ? -1f : 1f;
+                float z = FallenStartZ + Range(0f, 2f);
+                float nextRoots = z + Range(3f, 6f);
+                while (z < ExitZ - 7f)
+                {
+                    var chapter = ChapterAt(z);
+                    float step = chapter switch { Chapter.Fallen => Range(3.5f, 5.5f), Chapter.Grove => Range(2.4f, 3.4f), _ => Range(1.8f, 2.6f) };
+                    var p = Floor(z, side * Range(0.86f, 0.97f));
+                    bool busy = Reserved(p, side * 0.9f) || NearVignette(p);
+                    if (!busy && _rng.NextDouble() > 0.18)
+                    {
+                        switch (chapter)
+                        {
+                            case Chapter.Fallen:
+                                if (kit.Rocks.Length > 0 && _rng.NextDouble() < 0.5) PlacePrefab(root, kit.Rocks, p, 0.6f, 0.9f);
+                                Put(kit.GrassTall, root, p - Vector3.right * side * Range(0.5f, 0.9f), Range(0.9f, 1.2f), recolor: kit.Dry);
+                                break;
+                            case Chapter.Grove:
+                                Put(_rng.NextDouble() < 0.6 ? kit.FernA : kit.FernB, root, p, Range(1.5f, 2.1f));
+                                if (_rng.NextDouble() < 0.5) Put(kit.BushBlue, root, p + Vector3.forward * Range(-0.9f, 0.9f) + Vector3.right * side * 0.4f, Range(1.4f, 1.9f));
+                                break;
+                            default:
+                                Put(PickOf(kit.BushRound, kit.BushRound, kit.BushFlower), root, p + Vector3.right * side * 0.3f, Range(1.5f, 2.1f));
+                                Put(_rng.NextDouble() < 0.5 ? kit.FernA : kit.FernB, root, p - Vector3.right * side * Range(0.6f, 1f) + Vector3.forward * Range(-0.6f, 0.6f), Range(1.3f, 1.8f));
+                                break;
+                        }
+                    }
+                    // корни из-под стены — реже, «тут наверху растут большие деревья»
+                    if (z >= nextRoots)
+                    {
+                        nextRoots = z + Range(7f, 11f);
+                        var rp = Floor(z, side * Range(0.93f, 1f));
+                        if (!Reserved(Floor(z, side * 0.85f), side * 0.85f) && !NearVignette(rp))
+                            Put(_rng.NextDouble() < 0.5 && kit.RootsBig != null ? kit.RootsBig : kit.RootsSmall, root, rp,
+                                (side > 0 ? 270f : 90f) + Range(-40f, 40f), Range(1.1f, 1.6f), shadows: true);
+                    }
+                    z += step;
+                }
+            }
+        }
+
+        /// <summary>Камешки по краям тропы: редкие, в шахматном порядке — подчёркивают её линию.</summary>
+        private static void BuildPathPebbles(Transform root, Kit kit)
+        {
+            int i = 0;
+            for (float z = FallenStartZ; z < ExitZ - 4f; z += Range(4f, 6.5f), i++)
+            {
+                float side = i % 2 == 0 ? -1f : 1f;
+                var p = Floor(z, side * Range(0.3f, 0.38f));
+                if (Vector3.Distance(p, SkeletonPos) < 2.5f) continue;
+                Put(kit.Pebbles, root, p, Range(1.1f, 1.5f));
+                if (ChapterAt(z) != Chapter.Fallen && _rng.NextDouble() < 0.4)
+                    Put(PickOf(kit.StickA, kit.StickB), root, p + new Vector3(Range(-0.5f, 0.5f), 0f, Range(0.3f, 0.8f)), Range(0.9f, 1.2f));
+            }
+        }
+
+        private static bool NearVignette(Vector3 p)
+        {
+            foreach (var g in _glowSpots)
+                if (Vector3.Distance(g, p) < 2.6f) return true;
+            return false;
+        }
+
+        private static void AddCapsule(GameObject go, float radius, float height)
+        {
+            var cc = go.AddComponent<CapsuleCollider>();
+            cc.center = new Vector3(0f, height * 0.5f, 0f);
+            cc.radius = radius;
+            cc.height = height;
+        }
+
+        private static void AddBox(GameObject go, Vector3 size)
+        {
+            var bc = go.AddComponent<BoxCollider>();
+            bc.center = new Vector3(0f, size.y * 0.5f, 0f);
+            bc.size = size;
+        }
+
+        // ------------------------------------------------------------------ свет
+
+        /// <summary>Не ставим декор на тропу, в кратер, на скелета и перед выходом.</summary>
         private static bool Reserved(Vector3 p, float across)
         {
             if (Vector3.Distance(p, Floor(CraterZ)) < 7.5f) return true;
@@ -477,20 +852,6 @@ namespace Game.Editor
             if (p.z > ExitZ - 6f && Mathf.Abs(across) < 0.6f) return true;
             if (Vector3.Distance(p, SkeletonPos) < 3.2f) return true;
             return false;
-        }
-
-        /// <summary>Toon-материал со свечением: грани остаются видны, а Bloom даёт ореол.</summary>
-        private static Material GlowMat(string name, Color albedo, Color emission)
-        {
-            var m = ShowcaseSceneBuilder.Mat(name, albedo);
-            if (m.HasProperty("_EmissionColor"))
-            {
-                m.SetColor("_EmissionColor", emission);
-                m.EnableKeyword("_EMISSION"); // для URP Lit, если toon-шейдера нет
-            }
-            m.SetFloat("_RimStrength", 0.4f);
-            EditorUtility.SetDirty(m);
-            return m;
         }
 
         private static void AddPointLight(Transform parent, string name, Vector3 pos, Color color, float range, float intensity, float flicker = 0f)
@@ -513,387 +874,14 @@ namespace Game.Editor
             }
         }
 
-        /// <summary>Светящиеся грибы у стен: бирюзовые и синие кучки на ножках, у каждой кучки свой свет.</summary>
-        private static void BuildGlowShrooms(Transform parent)
-        {
-            var root = new GameObject("GlowShrooms").transform;
-            root.SetParent(parent);
-            var kinds = new[]
-            {
-                (cap: GlowMat("ShroomCapTeal", new Color(0.3f, 0.75f, 0.7f), new Color(0.25f, 1.6f, 1.35f)), light: new Color(0.35f, 1f, 0.85f)),
-                (cap: GlowMat("ShroomCapBlue", new Color(0.35f, 0.5f, 0.9f), new Color(0.35f, 0.75f, 2.2f)), light: new Color(0.45f, 0.65f, 1f)),
-            };
-            var stemMat = ShowcaseSceneBuilder.Mat("ShroomStem", new Color(0.62f, 0.66f, 0.74f));
-            var models = ForestDetails.LoadAll("Det_Shroom_Glow_A", "Det_Shroom_Glow_B", "Det_Shroom_Tall");
-            var modelLights = new[] { new Color(0.35f, 1f, 0.85f), new Color(0.45f, 0.65f, 1f), new Color(0.75f, 0.45f, 1f) };
-            _glowSpots.Clear();
+        // ------------------------------------------------------------------ живность
 
-            for (int i = 0; i < 26; i++)
-            {
-                float z = Range(CraterZ + 6f, ExitZ - 3f);
-                float across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.78f, 0.96f);
-                var p = Floor(z, across);
-                if (Reserved(p, across)) continue;
-                var kind = kinds[_rng.Next(kinds.Length)];
-                var cluster = new GameObject("ShroomCluster").transform;
-                cluster.SetParent(root);
-                cluster.position = p;
-                _glowSpots.Add(p);
-                if (models.Length == 3)
-                {
-                    // модели из Blender: главная кучка + 1–2 поменьше рядом, свет — цвета шляпок
-                    int k0 = _rng.Next(3);
-                    ForestDetails.Place(models[k0], cluster, p, Range(0f, 360f), Range(1.3f, 1.9f));
-                    for (int e = _rng.Next(1, 3); e > 0; e--)
-                        ForestDetails.Place(models[_rng.NextDouble() < 0.7 ? k0 : _rng.Next(3)], cluster,
-                            p + new Vector3(Range(-0.9f, 0.9f), 0f, Range(-0.9f, 0.9f)), Range(0f, 360f), Range(0.7f, 1.1f));
-                    AddPointLight(cluster, "ShroomLight", p + Vector3.up * 0.7f, modelLights[k0], Range(3.4f, 4.4f), Range(1.5f, 2.1f), flicker: 0.15f);
-                    continue;
-                }
-
-                int n = _rng.Next(3, 7);
-                for (int k = 0; k < n; k++)
-                {
-                    var at = p + new Vector3(Range(-0.5f, 0.5f), 0f, Range(-0.5f, 0.5f));
-                    float h = Range(0.1f, 0.38f), s = Range(0.14f, 0.32f);
-                    var tilt = Quaternion.Euler(Range(-14f, 14f), Range(0f, 360f), Range(-14f, 14f));
-                    var stem = ShowcaseSceneBuilder.Prop(PrimitiveType.Cylinder, cluster, "Stem", at + tilt * Vector3.up * h * 0.5f,
-                        new Vector3(0.05f + s * 0.12f, h * 0.5f, 0.05f + s * 0.12f), stemMat, keepCollider: false);
-                    stem.transform.rotation = tilt;
-                    var cap = ShowcaseSceneBuilder.Prop(PrimitiveType.Sphere, cluster, "Cap", at + tilt * Vector3.up * h,
-                        new Vector3(s, s * 0.45f, s), kind.cap, keepCollider: false);
-                    cap.transform.rotation = tilt;
-                }
-                AddPointLight(cluster, "ShroomLight", p + Vector3.up * 0.7f, kind.light, Range(3.2f, 4.2f), Range(1.4f, 2f), flicker: 0.15f);
-            }
-        }
-
-        /// <summary>
-        /// Кристаллы: осколки чужого мира, вбитые в землю падением героя. У кратера — золотые и фиолетовые
-        /// (две ветви браслета), дальше по ущелью — только фиолетовые, всё реже к выходу.
-        /// </summary>
-        private static void BuildCrystals(Transform parent)
-        {
-            var root = new GameObject("Crystals").transform;
-            root.SetParent(parent);
-            var mesh = CrystalMesh();
-            var violet = (mat: GlowMat("CrystalViolet", new Color(0.55f, 0.3f, 0.95f), new Color(0.55f, 0.2f, 1.3f)), light: new Color(0.7f, 0.4f, 1f));
-            var gold = (mat: GlowMat("CrystalGold", new Color(1f, 0.75f, 0.35f), new Color(1.25f, 0.7f, 0.18f)), light: new Color(1f, 0.7f, 0.35f));
-
-            var violetModels = ForestDetails.LoadAll("Det_Crystal_Violet", "Det_Crystal_Small");
-            var goldModel = ForestDetails.Load("Det_Crystal_Gold");
-
-            void Cluster(Vector3 p, (Material mat, Color light) kind, float scale)
-            {
-                var cluster = new GameObject("CrystalCluster").transform;
-                cluster.SetParent(root);
-                cluster.position = p;
-                _glowSpots.Add(p);
-                bool isGold = kind.mat == gold.mat;
-                if (violetModels.Length == 2 && goldModel != null)
-                {
-                    var main = isGold ? goldModel : violetModels[0];
-                    ForestDetails.Place(main, cluster, p, Range(0f, 360f), scale * Range(1.3f, 1.7f), castShadows: true);
-                    for (int e = _rng.Next(1, 4); e > 0; e--)
-                    {
-                        var off = Quaternion.Euler(0f, Range(0f, 360f), 0f) * Vector3.forward * Range(0.7f, 1.3f) * scale;
-                        ForestDetails.Place(isGold && _rng.NextDouble() < 0.5 ? goldModel : violetModels[1], cluster, p + off, Range(0f, 360f), scale * Range(0.8f, 1.3f));
-                    }
-                    AddPointLight(cluster, "CrystalLight", p + Vector3.up * 1f, kind.light, 4.8f * Mathf.Sqrt(scale), 1.8f, flicker: 0.2f);
-                    return;
-                }
-                int n = _rng.Next(3, 7);
-                for (int k = 0; k < n; k++)
-                {
-                    var go = new GameObject("Shard");
-                    go.transform.SetParent(cluster);
-                    go.transform.position = p + new Vector3(Range(-0.35f, 0.35f), -0.08f, Range(-0.35f, 0.35f)) * scale;
-                    go.transform.rotation = Quaternion.Euler(Range(-32f, 32f), Range(0f, 360f), Range(-32f, 32f));
-                    float w = Range(0.16f, 0.32f) * scale;
-                    go.transform.localScale = new Vector3(w, Range(0.45f, 1.3f) * scale, w);
-                    go.AddComponent<MeshFilter>().sharedMesh = mesh;
-                    var r = go.AddComponent<MeshRenderer>();
-                    r.sharedMaterial = kind.mat;
-                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                }
-                AddPointLight(cluster, "CrystalLight", p + Vector3.up * 1f, kind.light, 4.5f * Mathf.Sqrt(scale), 1.6f, flicker: 0.2f);
-            }
-
-            // у кратера: кольцо осколков, золото и фиолет вперемешку
-            for (int i = 0; i < 5; i++)
-            {
-                float a = i * 72f + Range(-15f, 15f);
-                if (Mathf.Abs(Mathf.DeltaAngle(a, 0f)) < 30f) a += 60f; // не перекрываем проход на север
-                var p = Floor(CraterZ) + Quaternion.Euler(0f, a, 0f) * Vector3.forward * Range(6.8f, 8.2f);
-                Cluster(p, i % 2 == 0 ? gold : violet, Range(0.9f, 1.3f));
-            }
-            // дальше по ущелью у стен
-            for (float z = CraterZ + 12f; z < ExitZ - 4f; z += Range(9f, 14f))
-            {
-                float across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.82f, 0.95f);
-                var p = Floor(z, across);
-                if (Reserved(p, across)) continue;
-                Cluster(p, violet, Range(0.7f, 1.1f));
-            }
-        }
-
-        /// <summary>Мелкие светящиеся цветы в траве: тёплые точки без собственного света — их «добивает» Bloom.</summary>
-        private static void BuildGlowFlowers(Transform parent)
-        {
-            var root = new GameObject("GlowFlowers").transform;
-            root.SetParent(parent);
-            var mats = new[]
-            {
-                ShowcaseSceneBuilder.UnlitMat("FlowerGlowPink", new Color(2.4f, 0.8f, 1.7f)),
-                ShowcaseSceneBuilder.UnlitMat("FlowerGlowYellow", new Color(2.6f, 1.9f, 0.55f)),
-                ShowcaseSceneBuilder.UnlitMat("FlowerGlowWhite", new Color(1.6f, 1.8f, 2.4f)),
-            };
-            var bells = ForestDetails.LoadAll("Det_Flower_Bells", "Det_Flower_Bells_Pink");
-            for (int i = 0; i < 45; i++)
-            {
-                float z = Range(ZMin + 4f, ZMax - 3f), across = Range(-0.92f, 0.92f);
-                var p = Floor(z, across);
-                if (Reserved(p, across)) continue;
-                if (bells.Length > 0)
-                {
-                    ForestDetails.Place(bells[_rng.NextDouble() < 0.7 ? 0 : bells.Length - 1], root, p, Range(0f, 360f), Range(1.1f, 1.6f));
-                    continue;
-                }
-                var mat = mats[_rng.Next(mats.Length)];
-                int n = _rng.Next(3, 8);
-                for (int k = 0; k < n; k++)
-                {
-                    float s = Range(0.05f, 0.09f);
-                    ShowcaseSceneBuilder.Prop(PrimitiveType.Sphere, root, "Flower",
-                        p + new Vector3(Range(-0.6f, 0.6f), Range(0.08f, 0.22f), Range(-0.6f, 0.6f)), Vector3.one * s, mat, keepCollider: false);
-                }
-            }
-        }
-
-        // ------------------------------------------------------------------ мелкая детализация
-        // Между крупными объектами не должно быть «пустого пола»: корни у стен, ветки, камешки, кучки листьев, кости.
-
-        private static void BuildGroundDetail(Transform parent)
-        {
-            var root = new GameObject("GroundDetail").transform;
-            root.SetParent(parent);
-            var rootMat = ShowcaseSceneBuilder.Mat("Roots", new Color(0.3f, 0.22f, 0.18f));
-            var twigMat = ShowcaseSceneBuilder.Mat("Twigs", new Color(0.36f, 0.27f, 0.2f));
-            var pebbleMat = ShowcaseSceneBuilder.Mat("Pebbles", new Color(0.44f, 0.42f, 0.47f));
-            var boneMat = ShowcaseSceneBuilder.Mat("Bone", new Color(0.82f, 0.78f, 0.66f));
-            var leafMats = new[]
-            {
-                ShowcaseSceneBuilder.Mat("LeafRust", new Color(0.62f, 0.32f, 0.18f)),
-                ShowcaseSceneBuilder.Mat("LeafOchre", new Color(0.66f, 0.5f, 0.22f)),
-                ShowcaseSceneBuilder.Mat("LeafDry", new Color(0.45f, 0.36f, 0.26f)),
-            };
-            var rockPrefabs = EnvironmentPrefabs.Load("Rock");
-            var grassPrefabs = EnvironmentPrefabs.Load("Grass");
-            var detailBushes = ForestDetails.LoadAll("Det_Bush_Round", "Det_Bush_Blue", "Det_Bush_Flower", "Det_Berry_Blue");
-            var bushPrefabs = detailBushes.Length > 0 ? detailBushes : EnvironmentPrefabs.Load("Bush"); // детальные кусты вместо шаров из forest_kit
-
-            GameObject Piece(PrimitiveType t, string name, Vector3 pos, Vector3 scale, Quaternion rot, Material m)
-            {
-                var go = ShowcaseSceneBuilder.Prop(t, root, name, pos, scale, m, keepCollider: false);
-                go.transform.rotation = rot;
-                var r = go.GetComponent<Renderer>();
-                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                return go;
-            }
-
-            bool models = ForestDetails.Available;
-            // корни: выползают из-под стен на пол, по 2–4 изогнутых сегмента (если нет моделей — см. BuildForestDetails)
-            for (float z = ZMin + 3f; !models && z < ZMax - 3f; z += Range(2.2f, 4f))
-            {
-                int side = _rng.NextDouble() < 0.5 ? -1 : 1;
-                var start = Floor(z, side * 1.02f);
-                if (Reserved(Floor(z, side * 0.9f), side * 0.9f)) continue;
-                float yaw = side > 0 ? 270f : 90f; // от стены к центру
-                yaw += Range(-35f, 35f);
-                var p = start;
-                float thick = Range(0.09f, 0.16f);
-                int segs = _rng.Next(2, 5);
-                for (int k = 0; k < segs; k++)
-                {
-                    float len = Range(0.6f, 1.2f);
-                    var dir = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
-                    var mid = p + dir * len * 0.5f + Vector3.up * thick * 0.25f;
-                    Piece(PrimitiveType.Cylinder, "Root", mid, new Vector3(thick, len * 0.5f, thick),
-                        Quaternion.LookRotation(dir) * Quaternion.Euler(90f, 0f, 0f), rootMat);
-                    p += dir * len;
-                    yaw += Range(-30f, 30f);
-                    thick *= 0.75f;
-                }
-            }
-
-            // ветки с сучками
-            for (int i = 0; !models && i < 40; i++)
-            {
-                float z = Range(ZMin + 3f, ZMax - 3f), across = Range(-0.9f, 0.9f);
-                var p = Floor(z, across);
-                if (Reserved(p, across)) continue;
-                float yaw = Range(0f, 360f), len = Range(0.6f, 1.4f);
-                var rot = Quaternion.Euler(0f, yaw, 0f);
-                Piece(PrimitiveType.Cylinder, "Branch", p + Vector3.up * 0.03f, new Vector3(0.05f, len * 0.5f, 0.05f), rot * Quaternion.Euler(90f, 0f, 0f), twigMat);
-                for (int k = 0; k < 2; k++)
-                {
-                    var at = p + rot * Vector3.forward * Range(-len * 0.35f, len * 0.35f) + Vector3.up * 0.03f;
-                    var twigRot = rot * Quaternion.Euler(0f, (k == 0 ? 1 : -1) * Range(30f, 60f), 0f);
-                    float tl = Range(0.2f, 0.4f);
-                    Piece(PrimitiveType.Cylinder, "Twig", at + twigRot * Vector3.forward * tl * 0.5f, new Vector3(0.025f, tl * 0.5f, 0.025f),
-                        twigRot * Quaternion.Euler(90f, 0f, 0f), twigMat);
-                }
-            }
-
-            // камешки: мелкие версии камней из набора (или кубики)
-            for (int i = 0; i < 140; i++)
-            {
-                float z = Range(ZMin + 2f, ZMax - 2f), across = Range(-0.97f, 0.97f);
-                var p = Floor(z, across);
-                if (Vector3.Distance(p, SkeletonPos) < 2f) continue;
-                if (rockPrefabs.Length > 0)
-                {
-                    var go = PlacePrefab(root, rockPrefabs, p, 0.12f, 0.28f);
-                    foreach (var c in go.GetComponentsInChildren<Collider>()) c.enabled = false; // камешки не мешают ходить
-                }
-                else
-                {
-                    float s = Range(0.08f, 0.2f);
-                    Piece(PrimitiveType.Cube, "Pebble", p + Vector3.up * s * 0.3f, new Vector3(s, s * 0.6f, s * 1.2f),
-                        Quaternion.Euler(Range(-20f, 20f), Range(0f, 360f), Range(-20f, 20f)), pebbleMat);
-                }
-            }
-
-            // кучки сухих листьев: плоские «пластинки» тёплых цветов, гуще у стен
-            for (int i = 0; !models && i < 38; i++)
-            {
-                float z = Range(ZMin + 3f, ZMax - 3f);
-                float across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.4f, 0.95f);
-                var c = Floor(z, across);
-                if (Reserved(c, across)) continue;
-                int n = _rng.Next(6, 14);
-                for (int k = 0; k < n; k++)
-                {
-                    var at = c + new Vector3(Range(-0.7f, 0.7f), 0.012f + k * 0.002f, Range(-0.7f, 0.7f));
-                    Piece(PrimitiveType.Cube, "Leaf", at, new Vector3(Range(0.1f, 0.16f), 0.006f, Range(0.07f, 0.11f)),
-                        Quaternion.Euler(Range(-8f, 8f), Range(0f, 360f), Range(-8f, 8f)), leafMats[_rng.Next(leafMats.Length)]);
-                }
-            }
-
-            // кости — объедки падальщиков, недалеко от их логова на середине ущелья
-            for (int i = 0; i < 10; i++)
-            {
-                float z = Range(-6f, 30f), across = Range(-0.8f, 0.8f);
-                var p = Floor(z, across);
-                if (Reserved(p, across)) continue;
-                Piece(PrimitiveType.Capsule, "Bone", p + Vector3.up * 0.04f, new Vector3(0.06f, Range(0.15f, 0.25f), 0.06f),
-                    Quaternion.Euler(90f, Range(0f, 360f), 0f), boneMat);
-                if (_rng.NextDouble() < 0.4)
-                    Piece(PrimitiveType.Sphere, "Skull", p + new Vector3(Range(-0.3f, 0.3f), 0.08f, Range(-0.3f, 0.3f)), new Vector3(0.16f, 0.14f, 0.19f),
-                        Quaternion.Euler(Range(-20f, 20f), Range(0f, 360f), Range(-30f, 30f)), boneMat);
-            }
-
-            // больше травы и кустов у стен (основная трава — в BuildDebris)
-            for (int i = 0; grassPrefabs.Length > 0 && i < 220; i++)
-            {
-                float z = Range(ZMin + 2f, ZMax - 2f);
-                float across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.45f, 0.98f);
-                var p = Floor(z, across);
-                if (!Reserved(p, across)) PlacePrefab(root, grassPrefabs, p, 0.6f, 1.1f);
-            }
-            for (int i = 0; bushPrefabs.Length > 0 && i < 30; i++)
-            {
-                float z = Range(ZMin + 2f, ZMax - 2f);
-                float across = (_rng.NextDouble() < 0.5 ? -1f : 1f) * Range(0.85f, 1f);
-                var p = Floor(z, across);
-                if (!Reserved(p, across)) { if (detailBushes.Length > 0) ForestDetails.Place(detailBushes[_rng.Next(detailBushes.Length)], root, p, Range(0f, 360f), Range(1.3f, 2.0f)); else PlacePrefab(root, bushPrefabs, p, 0.5f, 0.9f); }
-            }
-        }
-
-        // ------------------------------------------------------------------ живая детализация (модели forest_details.py)
-
-        /// <summary>Где стоят светящиеся грибы/кристаллы — вокруг них кружат мотыльки.</summary>
+        /// <summary>Где светятся грибы/кристаллы/колокольчики — вокруг них кружат мотыльки, рядом не ставим подлесок.</summary>
         private static readonly System.Collections.Generic.List<Vector3> _glowSpots = new();
 
-        /// <summary>
-        /// Папоротники, разные кусты, трава, ягоды, мухоморы, корни, ветки, листья, пни — и живность.
-        /// Правило читаемости: крупное и тёмное — у стен, на тропе и рядом только низкое и светлое.
-        /// </summary>
-        private static void BuildForestDetails(Transform parent, Transform gameplay)
+        /// <summary>Птички на опушке у тропы (вспархивают при приближении), мотыльки у света, жуки у якорей.</summary>
+        private static void BuildCritters(Transform gameplay, Kit kit)
         {
-            if (!ForestDetails.Available) return;
-            var root = new GameObject("ForestDetails").transform;
-            root.SetParent(parent);
-            var ferns = ForestDetails.LoadAll("Det_Fern_A", "Det_Fern_B");
-            var bushes = ForestDetails.LoadAll("Det_Bush_Round", "Det_Bush_Blue", "Det_Bush_Flower");
-            var grass = ForestDetails.LoadAll("Det_Grass_Tall", "Det_Grass_Blue");
-            var berries = ForestDetails.LoadAll("Det_Berry_Blue", "Det_Berry_Red");
-            var toad = ForestDetails.Load("Det_Shroom_Toadstool");
-            var rootsBig = ForestDetails.Load("Det_Roots_Big");
-            var rootsSmall = ForestDetails.Load("Det_Roots_Small");
-            var sticks = ForestDetails.LoadAll("Det_Stick_A", "Det_Stick_B");
-            var pile = ForestDetails.Load("Det_Stick_Pile");
-            var leaves = ForestDetails.Load("Det_Leaves");
-            var pebbles = ForestDetails.Load("Det_Pebbles");
-            var stump = ForestDetails.Load("Det_Stump");
-
-            float Side() => _rng.NextDouble() < 0.5 ? -1f : 1f;
-            GameObject Pick(GameObject[] arr) => arr[_rng.Next(arr.Length)];
-            void Scatter(int count, float acrossMin, float acrossMax, System.Action<Vector3> place, float zPad = 2f)
-            {
-                for (int i = 0; i < count; i++)
-                {
-                    float z = Range(ZMin + zPad, ZMax - zPad), across = Side() * Range(acrossMin, acrossMax);
-                    var p = Floor(z, across);
-                    if (!Reserved(p, across)) place(p);
-                }
-            }
-
-            // корни у подножия стен — «тут росли огромные деревья»
-            for (float z = ZMin + 3f; z < ZMax - 3f; z += Range(4f, 7f))
-            {
-                float side = Side();
-                var p = Floor(z, side * Range(0.9f, 1.0f));
-                if (Reserved(Floor(z, side * 0.85f), side * 0.85f)) continue;
-                float yawToCenter = side > 0 ? 270f : 90f;
-                ForestDetails.Place(_rng.NextDouble() < 0.5 && rootsBig != null ? rootsBig : rootsSmall, root, p,
-                    yawToCenter + Range(-50f, 50f), Range(1.1f, 1.8f), castShadows: true);
-            }
-            // пни у стен
-            for (int i = 0; stump != null && i < 5; i++)
-            {
-                float z = Range(CraterZ + 10f, ExitZ - 6f), across = Side() * Range(0.7f, 0.88f);
-                var p = Floor(z, across);
-                if (Reserved(p, across)) continue;
-                var go = ForestDetails.Place(stump, root, p, Range(0f, 360f), Range(1.0f, 1.4f), castShadows: true);
-                var cc = go.AddComponent<CapsuleCollider>();
-                cc.center = new Vector3(0f, 0.4f, 0f);
-                cc.radius = 0.45f;
-                cc.height = 0.8f;
-            }
-            // кусты и папоротники — у стен (крупное и тёмное не загораживает тропу)
-            Scatter(45, 0.65f, 0.97f, p => ForestDetails.Place(Pick(bushes), root, p, Range(0f, 360f), Range(1.2f, 2.0f)));
-            Scatter(60, 0.5f, 0.97f, p => ForestDetails.Place(Pick(ferns), root, p, Range(0f, 360f), Range(1.3f, 2.1f)));
-            Scatter(30, 0.4f, 0.9f, p => ForestDetails.Place(Pick(berries), root, p, Range(0f, 360f), Range(1.1f, 1.6f)));
-            if (toad != null)
-                Scatter(14, 0.4f, 0.9f, p => ForestDetails.Place(toad, root, p, Range(0f, 360f), Range(1.0f, 1.5f)));
-            // трава — везде, кроме тропы; у тропы пониже
-            Scatter(260, 0.3f, 0.98f, p => ForestDetails.Place(Pick(grass), root, p, Range(0f, 360f), Range(0.9f, 1.5f)));
-            // ветки, кучки хвороста, листья, камешки — по всему дну
-            Scatter(36, 0.3f, 0.95f, p => ForestDetails.Place(Pick(sticks), root, p, Range(0f, 360f), Range(0.9f, 1.5f)));
-            if (pile != null) Scatter(10, 0.4f, 0.9f, p => ForestDetails.Place(pile, root, p, Range(0f, 360f), Range(1f, 1.4f)));
-            if (leaves != null) Scatter(60, 0.0f, 0.95f, p => ForestDetails.Place(leaves, root, p, Range(0f, 360f), Range(1.0f, 1.8f)));
-            if (pebbles != null) Scatter(40, 0.3f, 0.98f, p => ForestDetails.Place(pebbles, root, p, Range(0f, 360f), Range(1.0f, 1.6f)));
-
-            BuildCritters(gameplay);
-        }
-
-        /// <summary>Птички у тропы (вспархивают при приближении), мотыльки у светящихся грибов, жуки на земле.</summary>
-        private static void BuildCritters(Transform gameplay)
-        {
-            var bird = ForestDetails.Load("Det_Bird");
-            var moth = ForestDetails.Load("Det_Moth");
-            var beetle = ForestDetails.Load("Det_Beetle");
             var root = new GameObject("Critters").transform;
             root.SetParent(gameplay);
 
@@ -907,62 +895,13 @@ namespace Game.Editor
                 c.Radius = radius;
             }
 
-            for (int i = 0; i < 8; i++)
-            {
-                float z = Range(CraterZ + 10f, ExitZ - 6f), across = Range(-0.6f, 0.6f);
-                var p = Floor(z, across);
-                if (Vector3.Distance(p, SkeletonPos) < 3f) continue;
-                Spawn(bird, p, Critter.Kind.Bird, 1.6f, 1.2f);
-            }
+            for (int i = 0; i < 4; i++)
+                Spawn(kit.Bird, Floor(EdgeStartZ + 3f + i * 6f + Range(-1f, 1f), (i % 2 == 0 ? 1f : -1f) * Range(0.25f, 0.45f)), Critter.Kind.Bird, 1.6f, 1.2f);
             foreach (var spot in _glowSpots)
-                if (_rng.NextDouble() < 0.6)
-                    Spawn(moth, spot, Critter.Kind.Moth, 1.8f, Range(1.2f, 2f));
-            for (int i = 0; i < 16; i++)
-            {
-                float z = Range(ZMin + 4f, ZMax - 4f), across = Range(-0.85f, 0.85f);
-                Spawn(beetle, Floor(z, across), Critter.Kind.Beetle, 2.2f, 1.2f);
-            }
-        }
-
-        /// <summary>Шестигранный кристалл с острой верхушкой (высота 1, ширина 1), плоские грани. Сохраняется ассетом.</summary>
-        private static Mesh CrystalMesh()
-        {
-            const string path = "Assets/_Project/Art/Generated/Crystal6.asset";
-            var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
-            if (mesh != null) return mesh;
-            mesh = new Mesh { name = "Crystal6" };
-
-            const int sides = 6;
-            const float body = 0.72f;
-            var verts = new System.Collections.Generic.List<Vector3>();
-            var tris = new System.Collections.Generic.List<int>();
-            void Tri(Vector3 a, Vector3 b, Vector3 c)
-            {
-                int o = verts.Count;
-                verts.Add(a); verts.Add(b); verts.Add(c);
-                tris.Add(o); tris.Add(o + 1); tris.Add(o + 2);
-            }
-            var top = new Vector3(0f, 1f, 0f);
-            for (int i = 0; i < sides; i++)
-            {
-                float a0 = i * Mathf.PI * 2f / sides, a1 = (i + 1) * Mathf.PI * 2f / sides;
-                var b0 = new Vector3(Mathf.Cos(a0) * 0.5f, 0f, Mathf.Sin(a0) * 0.5f);
-                var b1 = new Vector3(Mathf.Cos(a1) * 0.5f, 0f, Mathf.Sin(a1) * 0.5f);
-                var t0 = b0 * 0.9f + Vector3.up * body;
-                var t1 = b1 * 0.9f + Vector3.up * body;
-                // бок (по часовой, если смотреть снаружи — так Unity считает лицевой стороной)
-                Tri(b0, t1, b1);
-                Tri(b0, t0, t1);
-                // верхушка
-                Tri(t0, top, t1);
-            }
-            mesh.SetVertices(verts);
-            mesh.SetTriangles(tris, 0);
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
-            AssetDatabase.CreateAsset(mesh, path);
-            return mesh;
+                if (spot.z > FallenStartZ && _rng.NextDouble() < 0.8)
+                    Spawn(kit.Moth, spot, Critter.Kind.Moth, 1.8f, Range(1.2f, 2f));
+            for (int i = 0; i < 6; i++)
+                Spawn(kit.Beetle, Floor(Range(GroveStartZ, ExitZ - 8f), (i % 2 == 0 ? 1f : -1f) * Range(0.5f, 0.8f)), Critter.Kind.Beetle, 2.2f, 1.2f);
         }
 
         // ------------------------------------------------------------------ утилиты

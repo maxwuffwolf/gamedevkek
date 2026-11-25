@@ -42,5 +42,18 @@ namespace Game.DevTools
             Hero.Absorb(p.position + p.forward * 3f + Vector3.up * 0.5f, Mathf.Clamp(motes, 1, 20));
             return "энергия летит в наруч";
         }
+    
+
+        [DevCommand("grip", "Поворот меча в руке, градусы: grip <x> <y> <z> (без чисел — показать и куда смотрит клинок). Подобрал — перенеси в characters.json → appearance.weaponGrip")]
+        private static string Grip(float? x = null, float? y = null, float? z = null)
+        {
+            if (Hero == null) return NoHero;
+            if (x.HasValue) Hero.WeaponGrip = new Vector3(x.Value, y ?? 0f, z ?? 0f);
+            var g = Hero.WeaponGrip;
+            string dir = Hero.TryGetBladeDirection(out var d)
+                ? $"клинок: вперёд {d.x:+0.00;-0.00}, вправо {d.y:+0.00;-0.00}, вверх {d.z:+0.00;-0.00}"
+                : "оружие не в руке";
+            return $"weaponGrip = [{g.x:0}, {g.y:0}, {g.z:0}]; {dir}";
+        }
     }
 }

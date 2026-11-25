@@ -33,6 +33,9 @@ namespace Game.Gameplay.Actors
         private Renderer _body, _eyes, _brows, _hair, _crystal;
         private Light _crystalLight;
         private readonly Dictionary<string, GameObject> _weapons = new();
+        private readonly Dictionary<Transform, Quaternion> _weaponBaseRot = new();
+        private Vector3 _gripOverride;
+        private bool _hasGripOverride;
         private MaterialPropertyBlock _mpb; // создаём в Awake: Unity не разрешает это в инициализаторе поля
 
         private AppearanceDef _def = new();
@@ -67,7 +70,11 @@ namespace Game.Gameplay.Actors
                 else if (n == "Hero_Brows") _brows = r;
                 else if (n == "Hero_Hair") _hair = r;
                 else if (n == "Hero_BracerCrystal") _crystal = r;
-                else if (n.StartsWith("Wpn_")) _weapons[n] = r.gameObject;
+                else if (n.StartsWith("Wpn_"))
+                {
+                    _weapons[n] = r.gameObject;
+                    _weaponBaseRot[r.transform] = r.transform.localRotation;
+                }
             }
             if (_crystal != null)
             {
@@ -176,6 +183,98 @@ namespace Game.Gameplay.Actors
                 if (_def.Weapons == null || !_def.Weapons.TryGetValue(item.BaseId, out show)) show = _def.DefaultWeapon;
             }
             foreach (var kv in _weapons) kv.Value.SetActive(kv.Key == show);
+            ApplyGrip();
+        }
+
+        /// <summary>Текущий поворот оружия в кисти (из characters.json → appearance.weaponGrip или из консоли).</summary>
+        public Vector3 WeaponGrip
+        {
+            get
+            {
+                if (_hasGripOverride) return _gripOverride;
+                var g = _def.WeaponGrip;
+                return g != null && g.Length >= 3 ? new Vector3(g[0], g[1], g[2]) : Vector3.zero;
+            }
+            set
+            {
+                _gripOverride = value;
+                _hasGripOverride = true;
+                ApplyGrip();
+            }
+        }
+
+        private void ApplyGrip()
+        {
+            var rot = Quaternion.Euler(WeaponGrip);
+            foreach (var kv in _weaponBaseRot)
+            {
+                if (kv.Key == null) continue;
+                var baseRot = kv.Value;
+                if (_def.WeaponAutoGrip && TryAutoGrip(kv.Key, out var auto)) baseRot = auto;
+                kv.Key.localRotation = baseRot * rot;
+            }
+        }
+
+        /// <summary>
+        /// Хват по костям кисти (Humanoid): ось клинка — вдоль линии костяшек от мизинца к указательному,
+        /// ширина клинка (кромки) — вдоль пальцев. Считается в локальных координатах родителя оружия,
+        /// поэтому не зависит от текущего кадра анимации.
+        /// </summary>
+        private bool TryAutoGrip(Transform weapon, out Quaternion local)
+        {
+            local = Quaternion.identity;
+            var anim = GetComponentInChildren<Animator>();
+            if (anim == null || !anim.isHuman || weapon.parent == null) return false;
+            var hand = anim.GetBoneTransform(HumanBodyBones.RightHand);
+            var index = anim.GetBoneTransform(HumanBodyBones.RightIndexProximal);
+            var little = anim.GetBoneTransform(HumanBodyBones.RightLittleProximal) ?? anim.GetBoneTransform(HumanBodyBones.RightRingProximal);
+            var middle = anim.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            if (hand == null || index == null || little == null || middle == null) return false;
+            var mf = weapon.GetComponent<MeshFilter>();
+            if (mf == null || mf.sharedMesh == null) return false;
+            if (!BladeAxes(mf.sharedMesh.bounds, out var blade, out var width)) return false;
+
+            var parent = weapon.parent;
+            Vector3 P(Transform t) => parent.InverseTransformPoint(t.position);
+            var knuckles = (P(index) - P(little)).normalized;   // клинок выходит со стороны указательного
+            var fingers = P(middle) - P(hand);                  // от запястья к пальцам
+            fingers = Vector3.ProjectOnPlane(fingers, knuckles).normalized;
+            if (knuckles.sqrMagnitude < 1e-6f || fingers.sqrMagnitude < 1e-6f) return false;
+            local = Quaternion.LookRotation(knuckles, fingers) * Quaternion.Inverse(Quaternion.LookRotation(blade, width));
+            return true;
+        }
+
+        /// <summary>Ось клинка (самая длинная ось меша, к острию — в сторону от точки опоры) и ось ширины (гарда).</summary>
+        private static bool BladeAxes(Bounds b, out Vector3 blade, out Vector3 width)
+        {
+            var e = b.extents;
+            var axes = new[] { (e.x, Vector3.right), (e.y, Vector3.up), (e.z, Vector3.forward) };
+            System.Array.Sort(axes, (p, q) => q.Item1.CompareTo(p.Item1));
+            blade = axes[0].Item2;
+            width = axes[1].Item2;
+            if (Vector3.Dot(b.center, blade) < 0f) blade = -blade;
+            return axes[0].Item1 > axes[1].Item1 * 1.5f;
+        }
+
+        /// <summary>
+        /// Куда смотрит клинок видимого оружия относительно героя: (вперёд, вправо, вверх), каждое −1..1.
+        /// Ось клинка — самая длинная ось меша, в сторону от рукояти (точки опоры) к острию.
+        /// </summary>
+        public bool TryGetBladeDirection(out Vector3 relative)
+        {
+            relative = Vector3.zero;
+            foreach (var kv in _weapons)
+            {
+                if (!kv.Value.activeInHierarchy) continue;
+                var mf = kv.Value.GetComponent<MeshFilter>();
+                if (mf == null || mf.sharedMesh == null) continue;
+                BladeAxes(mf.sharedMesh.bounds, out var axis, out _);
+                var world = kv.Value.transform.TransformDirection(axis).normalized;
+                var root = transform;
+                relative = new Vector3(Vector3.Dot(world, root.forward), Vector3.Dot(world, root.right), Vector3.Dot(world, Vector3.up));
+                return true;
+            }
+            return false;
         }
 
         // ------------------------------------------------------------ энергия
