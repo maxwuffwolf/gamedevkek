@@ -942,6 +942,56 @@ def idle_pose(ph):
     }
 
 
+LEAN0, LEAN1, CROUCH = 42.0, 8.0, 1.0
+
+
+def quad_pose(ph, run, lean=None):
+    """На четвереньках: корпус наклонён вперёд, длинные лапы — передние ноги.
+    run 0 — крадущийся четырёхтактный шаг (ЗЛ, ПЛ, ЗП, ПП), run 1 — галоп: задние вместе, передние вместе."""
+    a = TAU * ph
+    # фазы ног: шаг — по очереди, галоп — пары с небольшим разносом
+    if run > 0.5:
+        phase = {"thigh.L": 0.0, "thigh.R": 0.1, "upperarm.L": 0.5, "upperarm.R": 0.6}
+    else:
+        phase = {"thigh.L": 0.0, "upperarm.L": 0.25, "thigh.R": 0.5, "upperarm.R": 0.75}
+    amp_leg = 22 + 16 * run
+    amp_arm = 24 + 20 * run
+    pose = {}
+    for s in ("L", "R"):
+        x = a - TAU * phase["thigh." + s]
+        lift = max(0.0, C(x))  # перенос ноги (нога в воздухе)
+        # присед: колени вперёд, голень назад — таз низко, спина почти горизонтально
+        pose["thigh." + s] = (-14 - 22 * CROUCH - LEAN0 - LEAN1 * run - amp_leg * S(x), 0, 0)
+        pose["shin." + s] = (14 + 34 * CROUCH - (22 + 22 * run) * lift, 0, 0)
+        pose["foot." + s] = (-6 - 14 * CROUCH + (18 + 18 * run) * lift - 10 * S(x), 0, 0)
+        pose["toes." + s] = (-14 * max(0.0, -S(x)), 0, 0)
+        x = a - TAU * phase["upperarm." + s]
+        lift = max(0.0, C(x))
+        # база -62°: лапа вытянута вперёд-вниз к земле; вынос вперёд в фазе переноса
+        # лапа примерно отвесно к земле при любом наклоне корпуса, качается вперёд-назад
+        tilt = LEAN0 + LEAN1 * run + 14 + 10
+        pose["upperarm." + s] = (-tilt + 18 - amp_arm * S(x), -6 if s == "L" else 6, 0)
+        pose["forearm." + s] = (10 - (30 + 25 * run) * lift, 0, 0)
+        pose["hand." + s] = (26 + (10 + 20 * run) * lift - 14 * S(x), 0, 0)
+        pose["fingers." + s] = (12 - 20 * lift, 0, 0)
+    # корпус почти горизонтально; в галопе спина пружинит (сжимается/разгибается)
+    flex = S(a) * (2 + 8 * run)
+    bob = abs(C(a)) if run < 0.5 else 0.5 + 0.5 * S(a + 0.6)
+    # весь корпус наклоняется вперёд вокруг стоп (ноги выше компенсируют), высоту потом ставит GROUND_FIX
+    pose["root"] = (LEAN0 + LEAN1 * run, 0, 0)
+    pose["loc"] = (0.0, 0.12, 0.035 * bob * (0.5 + run))
+    pose["hips"] = (-4 + flex * 0.4, 3 * S(a) * (1 - run), 4 * S(a) * (1 - run))
+    pose["spine"] = (14 + flex, 0, -3 * S(a) * (1 - run))
+    pose["chest"] = (10 - flex * 0.6, -3 * S(a) * (1 - run), -4 * S(a) * (1 - run))
+    pose["clavicle.L"] = (0, 0, 0)
+    pose["neck"] = (-28, 0, 2 * S(a))
+    pose["head"] = (-24 + 4 * bob * run, 2 * S(a), 3 * S(a) * (1 - run))
+    pose["jaw"] = (-(8 + 14 * run) - 6 * bob * run, 0, 0)
+    pose["ear.L"] = (0, 0, 8 + 8 * run)
+    pose["ear.R"] = (0, 0, -8 - 8 * run)
+    return pose
+
+
 def gait_pose(ph, run):
     """Пальцеходящий бег/шаг. run 0 — крадущийся шаг, 1 — бег."""
     a = TAU * ph
@@ -977,36 +1027,44 @@ def gait_pose(ph, run):
 
 REST = {}
 
+def _arms(up_l, up_r, fore, hand, fingers, roll=0.0):
+    """Обе лапы одинаково (зеркально по roll)."""
+    return {"upperarm.L": (up_l, -roll, 0), "upperarm.R": (up_r, roll, 0),
+            "forearm.L": (fore, 0, 0), "forearm.R": (fore, 0, 0),
+            "hand.L": (hand, 0, 0), "hand.R": (hand, 0, 0),
+            "fingers.L": (fingers, 0, 0), "fingers.R": (fingers, 0, 0)}
+
+
+# Удар двумя лапами сверху вниз: встаёт на дыбы, лапы над головой когтями назад — и рушит их вниз-вперёд.
 ATTACK = [
     (0.00, {}, "lin"),
-    # замах: разворот корпуса, правая лапа взлетает вверх-назад, пасть раскрыта
-    (0.40, {"loc": (0.0, 0.06, 0.02), "spine": (-6, 4, -18), "chest": (-10, 6, -16), "neck": (4, 0, 8),
-            "head": (-6, 0, 10), "jaw": (-22, 0, 0),
-            "clavicle.R": (0, 12, 0), "upperarm.R": (-50, 95, -20), "forearm.R": (-70, 0, 0), "hand.R": (-20, 0, 0),
-            "fingers.R": (10, 0, 0),
-            "upperarm.L": (-25, -20, 0), "forearm.L": (-30, 0, 0),
-            "thigh.L": (-18, 0, 0), "shin.L": (10, 0, 0), "thigh.R": (10, 0, 0), "shin.R": (-5, 0, 0)}, "out"),
-    (0.47, {"loc": (0.0, 0.03, 0.03), "spine": (-4, 4, -20), "chest": (-12, 6, -19), "neck": (4, 0, 8),
-            "head": (-8, 0, 10), "jaw": (-26, 0, 0),
-            "clavicle.R": (0, 14, 0), "upperarm.R": (-60, 105, -25), "forearm.R": (-75, 0, 0), "hand.R": (-25, 0, 0),
-            "fingers.R": (12, 0, 0),
-            "upperarm.L": (-25, -20, 0), "forearm.L": (-30, 0, 0),
-            "thigh.L": (-20, 0, 0), "shin.L": (10, 0, 0), "thigh.R": (12, 0, 0), "shin.R": (-5, 0, 0)}, "smooth"),
-    # удар: выпад вперёд, лапа рубит сверху вниз наискосок
-    (0.58, {"loc": (0.0, -0.2, -0.06), "spine": (16, -4, 16), "chest": (14, -6, 18), "neck": (-10, 0, -6),
-            "head": (-10, 0, -6), "jaw": (-30, 0, 0),
-            "clavicle.R": (0, -6, 10), "upperarm.R": (-80, 25, 40), "forearm.R": (-10, 0, 0), "hand.R": (10, 0, 0),
-            "fingers.R": (-25, 0, 0),
-            "upperarm.L": (25, -10, 0), "forearm.L": (-20, 0, 0),
-            "thigh.L": (-35, 0, 0), "shin.L": (-15, 0, 0), "foot.L": (25, 0, 0),
-            "thigh.R": (22, 0, 0), "shin.R": (-10, 0, 0)}, "in"),
-    (0.72, {"loc": (0.0, -0.18, -0.05), "spine": (14, -4, 14), "chest": (10, -5, 14), "neck": (-8, 0, -4),
-            "head": (-6, 0, -6), "jaw": (-16, 0, 0),
-            "clavicle.R": (0, -4, 8), "upperarm.R": (-55, 15, 35), "forearm.R": (-25, 0, 0),
-            "fingers.R": (-20, 0, 0),
-            "upperarm.L": (15, -8, 0), "forearm.L": (-15, 0, 0),
-            "thigh.L": (-30, 0, 0), "shin.L": (-12, 0, 0), "foot.L": (20, 0, 0),
-            "thigh.R": (18, 0, 0), "shin.R": (-8, 0, 0)}, "out"),
+    # подсел перед прыжком вверх
+    (0.14, add({"loc": (0, 0.03, -0.05), "spine": (6, 0, 0), "chest": (4, 0, 0), "head": (6, 0, 0), "jaw": (-10, 0, 0),
+                "thigh.L": (-12, 0, 0), "shin.L": (14, 0, 0), "thigh.R": (-12, 0, 0), "shin.R": (14, 0, 0)},
+               _arms(-25, -25, -30, -10, 5, 10)), "smooth"),
+    # на дыбах: корпус откинут назад, лапы над головой, когти за затылком, пасть раскрыта
+    (0.40, add({"loc": (0, 0.07, 0.06), "spine": (-14, 0, 0), "chest": (-16, 0, 0), "neck": (6, 0, 0),
+                "head": (-14, 0, 0), "jaw": (-30, 0, 0), "clavicle.L": (0, -10, 0), "clavicle.R": (0, 10, 0),
+                "thigh.L": (6, 0, 0), "shin.L": (-6, 0, 0), "thigh.R": (6, 0, 0), "shin.R": (-6, 0, 0),
+                "ear.L": (0, 0, 14), "ear.R": (0, 0, -14)},
+               _arms(-150, -150, -55, -25, 20, 18)), "out"),
+    (0.48, add({"loc": (0, 0.08, 0.07), "spine": (-16, 0, 0), "chest": (-18, 0, 0), "neck": (6, 0, 0),
+                "head": (-16, 0, 0), "jaw": (-32, 0, 0), "clavicle.L": (0, -12, 0), "clavicle.R": (0, 12, 0),
+                "thigh.L": (6, 0, 0), "shin.L": (-6, 0, 0), "thigh.R": (6, 0, 0), "shin.R": (-6, 0, 0),
+                "ear.L": (0, 0, 16), "ear.R": (0, 0, -16)},
+               _arms(-158, -158, -62, -28, 22, 18)), "smooth"),
+    # удар: обе лапы рушатся вниз перед собой, корпус складывается вперёд, выпад
+    (0.58, add({"loc": (0, -0.2, -0.11), "spine": (24, 0, 0), "chest": (22, 0, 0), "neck": (-14, 0, 0),
+                "head": (-12, 0, 0), "jaw": (-34, 0, 0), "clavicle.L": (0, 6, 0), "clavicle.R": (0, -6, 0),
+                "thigh.L": (-32, 0, 0), "shin.L": (-10, 0, 0), "foot.L": (22, 0, 0),
+                "thigh.R": (14, 0, 0), "shin.R": (8, 0, 0), "ear.L": (0, 0, 6), "ear.R": (0, 0, -6)},
+               _arms(-38, -38, -6, 14, -38, 6)), "in"),
+    # когти скребут по земле, отдача
+    (0.70, add({"loc": (0, -0.2, -0.12), "spine": (26, 0, 0), "chest": (22, 0, 0), "neck": (-16, 0, 0),
+                "head": (-12, 0, 0), "jaw": (-20, 0, 0),
+                "thigh.L": (-32, 0, 0), "shin.L": (-10, 0, 0), "foot.L": (22, 0, 0),
+                "thigh.R": (14, 0, 0), "shin.R": (8, 0, 0)},
+               _arms(-18, -18, -14, 10, -30, 6)), "out"),
     (1.00, {}, "smooth"),
 ]
 
@@ -1019,64 +1077,152 @@ HIT = [
     (1.0, {}, "smooth"),
 ]
 
+# Смерть: вздрог назад → шатается → колени подкашиваются → падает на колени → медленно валится ничком.
+# Позы сглаживаются сплайном (spline_poses), а не по отрезкам — без рывков на стыках.
 DEATH = [
-    (0.00, {}, "lin"),
-    # отдача назад, голова запрокинута
-    (0.18, {"loc": (0, 0.1, 0.02), "spine": (-12, 4, 6), "chest": (-18, 6, 8), "neck": (-10, 0, 0),
-            "head": (-30, 10, 15), "jaw": (-30, 0, 0),
-            "upperarm.L": (20, -40, 0), "upperarm.R": (20, 40, 0), "forearm.L": (-40, 0, 0), "forearm.R": (-40, 0, 0),
-            "ear.L": (0, 0, 20), "ear.R": (0, 0, -20)}, "out"),
-    # колени подкашиваются
-    (0.45, {"loc": (0, 0.04, -0.22), "spine": (10, 6, 6), "chest": (12, 6, 4), "neck": (8, 0, 0),
-            "head": (10, 12, 10), "jaw": (-20, 0, 0),
-            "upperarm.L": (-10, -20, 0), "upperarm.R": (-5, 25, 0), "forearm.L": (-20, 0, 0), "forearm.R": (-25, 0, 0),
+    (0.00, {}),
+    (0.10, {"loc": (0, 0.08, 0.02), "spine": (-10, 3, 4), "chest": (-16, 5, 6), "neck": (-8, 0, 0),
+            "head": (-26, 8, 12), "jaw": (-30, 0, 0), "upperarm.L": (18, -35, 0), "upperarm.R": (18, 35, 0),
+            "forearm.L": (-35, 0, 0), "forearm.R": (-35, 0, 0), "ear.L": (0, 0, 20), "ear.R": (0, 0, -20)}),
+    (0.26, {"loc": (0.02, 0.11, -0.02), "hips": (0, 5, 4), "spine": (-6, 6, 8), "chest": (-8, 6, 8),
+            "neck": (0, 0, 0), "head": (-10, 14, 16), "jaw": (-26, 0, 0),
+            "upperarm.L": (10, -25, 0), "upperarm.R": (5, 30, 0), "forearm.L": (-25, 0, 0), "forearm.R": (-30, 0, 0),
+            "thigh.L": (-10, 0, 0), "shin.L": (12, 0, 0), "thigh.R": (4, 0, 0), "shin.R": (-2, 0, 0)}),
+    (0.44, {"loc": (0, 0.06, -0.2), "hips": (0, 3, 2), "spine": (10, 6, 6), "chest": (12, 6, 4), "neck": (6, 0, 0),
+            "head": (8, 14, 12), "jaw": (-20, 0, 0),
+            "upperarm.L": (-8, -18, 0), "upperarm.R": (-4, 22, 0), "forearm.L": (-20, 0, 0), "forearm.R": (-22, 0, 0),
+            "fingers.L": (-15, 0, 0), "fingers.R": (-15, 0, 0),
             "thigh.L": (-45, 0, 0), "shin.L": (55, 0, 0), "foot.L": (-10, 0, 0),
-            "thigh.R": (-38, 0, 0), "shin.R": (50, 0, 0), "foot.R": (-12, 0, 0)}, "in"),
-    # падает ничком
-    (0.80, {"root": (78, 4, 10), "loc": (0, -0.05, 0.12), "spine": (-6, 4, 4), "chest": (-6, 4, 0), "neck": (-20, 0, 0),
-            "head": (-15, 25, 35), "jaw": (-24, 0, 0),
-            "upperarm.L": (-70, -35, 0), "upperarm.R": (-45, 50, 15), "forearm.L": (-15, 0, 0), "forearm.R": (-35, 0, 0),
-            "thigh.L": (-15, 0, 0), "shin.L": (40, 0, 0),
-            "thigh.R": (-30, 0, 0), "shin.R": (60, 0, 0), "foot.R": (-20, 0, 0)}, "in"),
-    (0.90, {"root": (86, 4, 10), "loc": (0, -0.04, 0.10), "spine": (-8, 4, 4), "chest": (-8, 4, 0), "neck": (-22, 0, 0),
-            "head": (-18, 30, 40), "jaw": (-28, 0, 0),
-            "upperarm.L": (-80, -38, 0), "upperarm.R": (-48, 55, 15), "forearm.L": (-10, 0, 0), "forearm.R": (-30, 0, 0),
-            "thigh.L": (-8, 0, 0), "shin.L": (12, 0, 0), "foot.L": (-25, 0, 0),
-            "thigh.R": (-14, 0, 0), "shin.R": (22, 0, 0), "foot.R": (-30, 0, 0)}, "out"),
-    (1.00, {"root": (84, 4, 10), "loc": (0, -0.04, 0.10), "spine": (-8, 4, 4), "chest": (-8, 4, 0), "neck": (-22, 0, 0),
+            "thigh.R": (-40, 0, 0), "shin.R": (52, 0, 0), "foot.R": (-12, 0, 0)}),
+    # на коленях, корпус клонится вперёд, лапы обвисли
+    (0.60, {"root": (18, 2, 4), "loc": (0, 0.04, -0.3), "spine": (14, 6, 4), "chest": (14, 5, 2), "neck": (6, 0, 0),
+            "head": (10, 18, 16), "jaw": (-18, 0, 0),
+            "upperarm.L": (-20, -12, 0), "upperarm.R": (-15, 18, 0), "forearm.L": (-15, 0, 0), "forearm.R": (-18, 0, 0),
+            "fingers.L": (-20, 0, 0), "fingers.R": (-20, 0, 0),
+            "thigh.L": (-60, 0, 0), "shin.L": (75, 0, 0), "foot.L": (15, 0, 0), "toes.L": (25, 0, 0),
+            "thigh.R": (-55, 0, 0), "shin.R": (72, 0, 0), "foot.R": (15, 0, 0), "toes.R": (25, 0, 0)}),
+    (0.78, {"root": (52, 3, 7), "loc": (0, 0.0, -0.16), "spine": (4, 5, 4), "chest": (2, 4, 2), "neck": (-10, 0, 0),
+            "head": (-8, 24, 28), "jaw": (-22, 0, 0),
+            "upperarm.L": (-130, -42, 0), "upperarm.R": (20, 35, 5), "forearm.L": (-15, 0, 0), "forearm.R": (8, 0, 0),
+            "fingers.R": (10, 0, 0),
+            "thigh.L": (-35, 0, 0), "shin.L": (45, 0, 0), "foot.L": (30, 0, 0), "toes.L": (30, 0, 0),
+            "thigh.R": (-40, 0, 0), "shin.R": (55, 0, 0), "foot.R": (30, 0, 0), "toes.R": (30, 0, 0)}),
+    (0.92, {"root": (80, 4, 9), "loc": (0, -0.03, 0.04), "spine": (-6, 4, 4), "chest": (-7, 4, 0), "neck": (-20, 0, 0),
+            "head": (-16, 30, 38), "jaw": (-26, 0, 0),
+            "upperarm.L": (-150, -30, 0), "upperarm.R": (25, 30, 0), "forearm.L": (-20, 0, 0), "forearm.R": (5, 0, 0),
+            "thigh.L": (-6, 0, 0), "shin.L": (8, 0, 0), "foot.L": (25, 0, 0), "toes.L": (20, 0, 0),
+            "thigh.R": (-12, 0, 0), "shin.R": (12, 0, 0), "foot.R": (25, 0, 0), "toes.R": (20, 0, 0)}),
+    (1.00, {"root": (83, 4, 10), "loc": (0, -0.04, 0.06), "spine": (-8, 4, 4), "chest": (-8, 4, 0), "neck": (-22, 0, 0),
             "head": (-18, 30, 40), "jaw": (-24, 0, 0),
-            "upperarm.L": (-80, -38, 0), "upperarm.R": (-48, 55, 15), "forearm.L": (-10, 0, 0), "forearm.R": (-30, 0, 0),
-            "thigh.L": (-8, 0, 0), "shin.L": (12, 0, 0), "foot.L": (-25, 0, 0),
-            "thigh.R": (-14, 0, 0), "shin.R": (22, 0, 0), "foot.R": (-30, 0, 0)}, "smooth"),
+            "upperarm.L": (-160, -32, 0), "upperarm.R": (35, 32, 0), "forearm.L": (-18, 0, 0), "forearm.R": (8, 0, 0),
+            "fingers.L": (-25, 0, 0), "fingers.R": (10, 0, 0),
+            "thigh.L": (-4, 0, 0), "shin.L": (6, 0, 0), "foot.L": (30, 0, 0), "toes.L": (25, 0, 0),
+            "thigh.R": (-10, 0, 0), "shin.R": (10, 0, 0), "foot.R": (30, 0, 0), "toes.R": (25, 0, 0)}),
 ]
+
+
+def spline_poses(seq, t):
+    """Кубический Эрмит по ключевым позам (касательные по соседям, на концах — ноль): плавно, без изломов."""
+    ts = [k[0] for k in seq]
+    ps = [k[1] for k in seq]
+    keys = set()
+    for p in ps:
+        keys |= set(p)
+    n = len(seq)
+    i = max(0, min(n - 2, max(j for j in range(n) if ts[j] <= t)))
+    t0, t1 = ts[i], ts[i + 1]
+    h = t1 - t0
+    u = (t - t0) / h
+
+    def val(j, k):
+        return V(ps[j].get(k, (0, 0, 0)))
+
+    def tangent(j, k):
+        if j == 0 or j == n - 1:
+            return V((0, 0, 0))
+        return (val(j + 1, k) - val(j - 1, k)) / (ts[j + 1] - ts[j - 1])
+    h00 = 2 * u ** 3 - 3 * u ** 2 + 1
+    h10 = u ** 3 - 2 * u ** 2 + u
+    h01 = -2 * u ** 3 + 3 * u ** 2
+    h11 = u ** 3 - u ** 2
+    out = {}
+    for k in keys:
+        v = val(i, k) * h00 + tangent(i, k) * h * h10 + val(i + 1, k) * h01 + tangent(i + 1, k) * h * h11
+        out[k] = tuple(v)
+    return out
+
 
 # имя: (кадров, петля, функция фазы → поза)
 ANIMS = {
     "Idle": (60, True, lambda ph: idle_pose(ph)),
-    "Walk": (36, True, lambda ph: gait_pose(ph, 0.0)),
-    "Run": (20, True, lambda ph: gait_pose(ph, 1.0)),
-    "Attack": (24, False, lambda ph: add(scale(idle_pose(0), 1 - ph), keyposes(ATTACK, ph))),
+    "Walk": (36, True, lambda ph: quad_pose(ph, 0.0)),
+    "Run": (18, True, lambda ph: quad_pose(ph, 1.0)),
+    "Attack": (26, False, lambda ph: add(scale(idle_pose(0), 1 - ph), keyposes(ATTACK, ph))),
     "Hit": (10, False, lambda ph: add(scale(idle_pose(0), 1.0), keyposes(HIT, ph))),
-    "Death": (40, False, lambda ph: add(scale(idle_pose(0), max(0.0, 1 - ph * 2)), keyposes(DEATH, ph))),
+    "Death": (54, False, lambda ph: add(scale(idle_pose(0), max(0.0, 1 - ph * 2.5)), spline_poses(DEATH, ph))),
 }
 
+# клипы, где тело ложится на землю: корень приподнимается ровно настолько, чтобы ничто не ушло под землю
+# "lift" — только приподнять (смерть, бег с фазой полёта); "contact" — держать нижнюю точку на земле (шаг)
+GROUND_FIX = {"Death": "lift", "Walk": "contact", "Run": "lift"}
 
-def root_rot(pose):
-    """'root' задаётся как (pitch, roll, yaw) — вращение всего тела вокруг точки между стоп."""
-    return pose
+
+def lowest_z(body):
+    dg = bpy.context.evaluated_depsgraph_get()
+    ev = body.evaluated_get(dg)
+    me = ev.to_mesh()
+    z = min((body.matrix_world @ v.co).z for v in me.vertices)
+    ev.to_mesh_clear()
+    return z
 
 
-def build_actions(arm):
+def build_actions(arm, body):
     arm.animation_data_create()
     actions = {}
+    sc = bpy.context.scene
+    set_frame = sc.frame_set
+    rest_floor = None
     for name, (frames, loop, fn) in ANIMS.items():
         act = bpy.data.actions.new(name)
         act.use_fake_user = True
         arm.animation_data.action = act
         last = frames if loop else frames - 1
+        poses = []
         for f in range(0, last + 1):
             ph = f / frames if loop else f / max(1, frames - 1)
-            apply_pose(arm, fn(ph % 1.0 if loop else ph), f)
+            pose = fn(ph % 1.0 if loop else ph)
+            poses.append(pose)
+            apply_pose(arm, pose, f)
+        if name == "Idle":
+            set_frame(0)
+            rest_floor = lowest_z(body)  # кончики когтей ног в стойке (чуть ниже нуля)
+        if name in GROUND_FIX:
+            mode = GROUND_FIX[name]
+            need = []
+            for f in range(0, last + 1):
+                set_frame(f)
+                d = (rest_floor + 0.01) - lowest_z(body)
+                need.append(d if mode == "contact" else max(0.0, d))
+            n = len(need)
+
+            def at(i):  # петли сглаживаем по кругу, остальное — с краями
+                return need[i % n] if loop else need[max(0, min(n - 1, i))]
+            win = 1 if loop else 3
+            if mode == "lift":
+                mx = [max(at(j) for j in range(i - win, i + win + 1)) for i in range(n)]
+            else:
+                mx = need
+            lift = [sum(mx[(j % n) if loop else max(0, min(n - 1, j))] for j in range(i - win, i + win + 1)) / (2 * win + 1)
+                    for i in range(n)]
+            if loop:
+                lift[-1] = lift[0]
+            for f, pose in enumerate(poses):
+                if lift[f] > 1e-4:
+                    pose = dict(pose)
+                    lx, ly, lz = pose.get("loc", (0, 0, 0))
+                    pose["loc"] = (lx, ly, lz + lift[f])
+                    apply_pose(arm, pose, f)
+            print(f"[ghoul] {name}: подъём над землёй до {max(lift):.3f} м")
         actions[name] = (act, last)
     # каждое действие — в свою NLA-дорожку (так FBX-экспорт отдаёт их отдельными клипами)
     arm.animation_data.action = None
@@ -1087,8 +1233,6 @@ def build_actions(arm):
         st.frame_end = last
         tr.mute = True
     return actions
-
-
 def set_action(arm, name):
     arm.animation_data.action = bpy.data.actions[name]
     try:  # Blender 4.4+: у действия есть слоты
@@ -1215,8 +1359,8 @@ def make_previews(arm, out, preview, poses):
             sheet.paste(im, (700 * i, 0))
         sheet.save(preview)
     if poses:
-        frames = [("Idle", 0), ("Run", 5), ("Run", 15), ("Attack", 11), ("Attack", 14), ("Hit", 3), ("Death", 14),
-                  ("Death", 39)]
+        frames = [("Attack", 4), ("Attack", 11), ("Attack", 15), ("Attack", 18), ("Death", 6), ("Death", 24),
+                  ("Death", 40), ("Death", 53)]
         shots = []
         for i, (act, f) in enumerate(frames):
             set_action(arm, act)
@@ -1278,7 +1422,7 @@ def main():
 
     arm = build_armature()
     skin_to(arm, body)
-    build_actions(arm)
+    build_actions(arm, body)
     set_action(arm, "Idle")
     sc.frame_set(0)
 

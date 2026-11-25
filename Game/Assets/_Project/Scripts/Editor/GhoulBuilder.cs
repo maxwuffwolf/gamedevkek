@@ -25,8 +25,8 @@ namespace Game.Editor
         public const string PrefabPath = "Assets/_Project/Prefabs/Characters/Mon_Ghoul.prefab";
         public const string VisualPath = "Assets/_Project/Resources/Visuals/AV_Scavenger.asset";
         public const string VisualId = "scavenger";
-        /// <summary>FBX из Blender смотрит в -Z (как герой) — разворачиваем модель внутри префаба.</summary>
-        public const float ModelYaw = 180f;
+        /// <summary>Поворот модели внутри префаба. Гуль из ghoul_build.py после импорта уже смотрит в +Z (проверено в игре: 180 — ходил спиной).</summary>
+        public const float ModelYaw = 0f;
 
         [MenuItem("Game/Монстры/Собрать падальщика (гуль)", priority = 60)]
         public static void BuildMenu()
@@ -193,7 +193,7 @@ namespace Game.Editor
             atk.speedParameterActive = true;
             var toAtk = sm.AddAnyStateTransition(atk);
             toAtk.AddCondition(AnimatorConditionMode.If, 0, "Attack");
-            toAtk.duration = 0.06f;
+            toAtk.duration = 0.1f;
             toAtk.canTransitionToSelf = true;
             var back = atk.AddTransition(loco);
             back.hasExitTime = true;
@@ -206,7 +206,7 @@ namespace Game.Editor
                 die.motion = death;
                 var toDie = sm.AddAnyStateTransition(die);
                 toDie.AddCondition(AnimatorConditionMode.If, 0, "Die");
-                toDie.duration = 0.08f;
+                toDie.duration = 0.15f;
                 toDie.canTransitionToSelf = false;
                 var revive = die.AddTransition(loco);
                 revive.AddCondition(AnimatorConditionMode.If, 0, "Revive");
@@ -282,7 +282,8 @@ namespace Game.Editor
             mi.importCameras = false;
             mi.importLights = false;
             mi.importVisibility = false;
-            mi.animationCompression = ModelImporterAnimationCompression.KeyframeReduction;
+            // без сжатия: клипы короткие, а сжатие ключей давало «шероховатость» в падении
+            mi.animationCompression = ModelImporterAnimationCompression.Off;
         }
 
         private void OnPreprocessAnimation()

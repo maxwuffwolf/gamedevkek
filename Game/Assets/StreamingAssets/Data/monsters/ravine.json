@@ -19,7 +19,7 @@
       "id": "scavenger_slash", "name": "Удар когтями",
       "behavior": "Melee", "cooldown": 1.1, "damageMultiplier": 1.0,
       "shape": { "type": "Arc", "radius": 1.9, "angle": 100 },
-      "duration": 0.8, "hitFrame": 0.55, "usesAttackSpeed": true, "moveWhileCasting": 0,
+      "duration": 0.8, "hitFrame": 0.58, "usesAttackSpeed": true, "moveWhileCasting": 0,
       "vfxColor": "#FFB060"
     }
   ],
