@@ -128,6 +128,25 @@ for s in ("L", "R"):
     ]
 BONE_SEG = {b[0]: (b[1], b[2]) for b in BONES}
 
+# Короткие задние лапы: модель строится в «длинноногих» координатах выше, а потом ноги сжимаются по высоте,
+# а всё, что выше таза, опускается на ту же величину (руки почти достают земли — упырь ползает на них).
+LEG_K = 0.72  # доля исходной длины ног
+HIP_Z = J["pelvis"].z
+LEG_DROP = HIP_Z * (1 - LEG_K)
+LEG_BONES = ("thigh.", "shin.", "foot.", "toes.")
+
+
+def squash(co, legw):
+    """legw — насколько точка принадлежит ноге (0 — корпус/руки, 1 — нога)."""
+    z = co.z * LEG_K * legw + (co.z - LEG_DROP) * (1 - legw)
+    return V((co.x, co.y, z))
+
+
+def squash_bone(name, co):
+    if name == "root":
+        return co
+    return squash(co, 1.0 if name.startswith(LEG_BONES) else 0.0)
+
 
 # ---------------------------------------------------------------- сборка кусков с весами
 
@@ -834,6 +853,7 @@ def build_armature():
     eb = arm_data.edit_bones
     for name, h, t, parent in BONES:
         b = eb.new(name)
+        h, t = squash_bone(name, h), squash_bone(name, t)
         b.head, b.tail = h, t
         # единая ориентация осей: Z кости — вперёд (-Y) для вертикальных, вверх для горизонтальных
         axis = (t - h).normalized()
@@ -942,51 +962,59 @@ def idle_pose(ph):
     }
 
 
-LEAN0, LEAN1 = 46.0, 6.0
+LEAN0, LEAN1 = 56.0, 4.0
+ARM_BASE, ARM_WIDE, LEG_BASE, LEG_WIDE = 44.0, 50.0, 0.0, 34.0
+
+
+def limb_cycle(x, stance=0.6):
+    """Фаза 0..1 → (вынос вперёд -1..1, подъём 0..1). Опора: лапа на земле едет назад; перенос: дугой вперёд."""
+    x %= 1.0
+    if x < stance:
+        u = x / stance
+        return 1.0 - 2.0 * u, 0.0
+    u = (x - stance) / (1.0 - stance)
+    e = u * u * (3 - 2 * u)
+    return -1.0 + 2.0 * e, math.sin(math.pi * u)
 
 
 def quad_pose(ph, run, lean=None):
-    """Ползком на четырёх лапах, как упырь: корпус низко над землёй, локти и колени в стороны,
-    лапы переставляются по диагонали (задняя левая с передней правой) — ползёт, а не скачет.
-    run 0 — крадётся, run 1 — быстро стелется по земле (та же походка, чаще и шире шаг)."""
-    a = TAU * ph
-    # диагональные пары, у шага — с небольшим разносом (четырёхтакт), у бега — почти вместе
-    d = 0.12 * (1 - run) + 0.04 * run
-    phase = {"thigh.L": 0.0, "upperarm.R": d, "thigh.R": 0.5, "upperarm.L": 0.5 + d}
-    amp_leg = 20 + 10 * run
-    amp_arm = 22 + 14 * run
-    crouch = 1.15 + 0.1 * run
+    """Ползком, как упырь: корпус низко и горизонтально, лапы широко в стороны.
+    Длинные руки гребут попеременно: лапа взлетает, широкой дугой выносится вперёд и вбивается когтями в землю,
+    подтягивая тело; короткие задние ноги по-лягушачьи коленями наружу. Корпус перекатывается с боку на бок."""
+    reach = 32 + 10 * run   # вынос руки вперёд-назад (град)
+    raise_ = 40 + 15 * run  # насколько лапа взлетает в переносе
+    stride = 20 + 8 * run   # шаг задних ног
     pose = {}
+    fwd = {}
     for s in ("L", "R"):
-        out = -1 if s == "L" else 1  # знак roll «наружу»
-        x = a - TAU * phase["thigh." + s]
-        lift = max(0.0, C(x)) ** 1.5  # невысокий перенос — лапа скользит над землёй
-        pose["thigh." + s] = (-14 - 22 * crouch - LEAN0 - LEAN1 * run - amp_leg * S(x), 16 * out, 0)
-        pose["shin." + s] = (14 + 34 * crouch - (8 + 6 * run) * lift, 0, 0)
-        pose["foot." + s] = (-6 - 14 * crouch + (14 + 8 * run) * lift - 8 * S(x), 0, 0)
-        pose["toes." + s] = (-14 * max(0.0, -S(x)), 0, 0)
-        x = a - TAU * phase["upperarm." + s]
-        lift = max(0.0, C(x)) ** 1.5
-        # плечо разведено в стороны, локоть согнут наружу — «паучья» постановка лап
-        tilt = LEAN0 + LEAN1 * run + 20 + 14
-        pose["upperarm." + s] = (-tilt + 50 - amp_arm * S(x), 48 * out, 0)
-        pose["forearm." + s] = (-72 - (18 + 8 * run) * lift, 0, 0)
-        pose["hand." + s] = (66 + 14 * lift - 12 * S(x), 0, 0)
-        pose["fingers." + s] = (16 - 18 * lift, 0, 0)
-    # корпус качается из стороны в сторону (как у ящерицы), почти без подпрыгиваний
-    sway = S(a)
+        out = -1 if s == "L" else 1
+        # рука и противоположная нога работают вместе; рука чуть раньше
+        f, lift = limb_cycle(ph + (0.0 if s == "L" else 0.5), 0.58)
+        fwd[s] = f
+        pose["clavicle." + s] = (-6 * f, 12 * out, 4 * f * -out)
+        # корпус почти горизонтален, поэтому «в стороны» — это поворот вокруг его оси «вверх» (yaw), а не roll
+        pose["upperarm." + s] = (-(LEAN0 + LEAN1 * run) - 26 + ARM_BASE - reach * f - raise_ * lift,
+                                 0, -(ARM_WIDE + 12 * lift) * out)
+        pose["forearm." + s] = (-55 - 35 * lift + 15 * f, 0, 0)
+        pose["hand." + s] = (62 + 25 * lift - 10 * f, 0, 0)
+        pose["fingers." + s] = (18 - 35 * lift, 0, 0)  # когти растопырены перед ударом, подгребают на опоре
+        g, glift = limb_cycle(ph + (0.5 if s == "L" else 0.0) + 0.08, 0.62)
+        pose["thigh." + s] = (-(LEAN0 + LEAN1 * run) - 40 + LEG_BASE - stride * g - 10 * glift, 0, -LEG_WIDE * out)
+        pose["shin." + s] = (42 + 18 * glift, 0, 0)
+        pose["foot." + s] = (-6 - 10 * glift, 0, 0)
+        pose["toes." + s] = (10 * max(0.0, -g), 0, 0)
+    # корпус: перекат к опорной руке, поворот плеч за выносимой лапой
+    roll = (fwd["R"] - fwd["L"]) * 0.5
     pose["root"] = (LEAN0 + LEAN1 * run, 0, 0)
-    pose["loc"] = (0.0, 0.12, 0.012 * abs(C(a)))
-    pose["hips"] = (-4, 4 * sway, 8 * sway)
-    pose["spine"] = (20, 0, -6 * sway)
-    pose["chest"] = (14, -4 * sway, -8 * sway)
-    pose["clavicle.L"] = (0, 10, 0)
-    pose["clavicle.R"] = (0, -10, 0)
-    pose["neck"] = (-34, 0, 5 * sway)
-    pose["head"] = (-30, 3 * sway, 6 * sway)
-    pose["jaw"] = (-(10 + 10 * run), 0, 0)
-    pose["ear.L"] = (0, 0, 10 + 8 * run)
-    pose["ear.R"] = (0, 0, -10 - 8 * run)
+    pose["loc"] = (0.0, 0.14, 0.0)
+    pose["hips"] = (-6, -5 * roll, -7 * roll)
+    pose["spine"] = (18, 4 * roll, 6 * roll)
+    pose["chest"] = (10, 8 * roll, 12 * roll)
+    pose["neck"] = (-40, 0, -6 * roll)
+    pose["head"] = (-34, -4 * roll, -8 * roll)
+    pose["jaw"] = (-(12 + 10 * run), 0, 0)
+    pose["ear.L"] = (0, 0, 14 + 6 * run)
+    pose["ear.R"] = (0, 0, -14 - 6 * run)
     return pose
 
 
@@ -1107,12 +1135,12 @@ DEATH = [
             "thigh.R": (-40, 0, 0), "shin.R": (55, 0, 0), "foot.R": (30, 0, 0), "toes.R": (30, 0, 0)}),
     (0.92, {"root": (80, 4, 9), "loc": (0, -0.03, 0.04), "spine": (-6, 4, 4), "chest": (-7, 4, 0), "neck": (-20, 0, 0),
             "head": (-16, 30, 38), "jaw": (-26, 0, 0),
-            "upperarm.L": (-150, -30, 0), "upperarm.R": (25, 30, 0), "forearm.L": (-20, 0, 0), "forearm.R": (5, 0, 0),
+            "upperarm.L": (-118, -30, 0), "upperarm.R": (25, 30, 0), "forearm.L": (0, 0, 0), "forearm.R": (5, 0, 0),
             "thigh.L": (-6, 0, 0), "shin.L": (8, 0, 0), "foot.L": (25, 0, 0), "toes.L": (20, 0, 0),
             "thigh.R": (-12, 0, 0), "shin.R": (12, 0, 0), "foot.R": (25, 0, 0), "toes.R": (20, 0, 0)}),
     (1.00, {"root": (83, 4, 10), "loc": (0, -0.04, 0.06), "spine": (-8, 4, 4), "chest": (-8, 4, 0), "neck": (-22, 0, 0),
             "head": (-18, 30, 40), "jaw": (-24, 0, 0),
-            "upperarm.L": (-160, -32, 0), "upperarm.R": (35, 32, 0), "forearm.L": (-18, 0, 0), "forearm.R": (8, 0, 0),
+            "upperarm.L": (-124, -32, 0), "upperarm.R": (35, 32, 0), "forearm.L": (6, 0, 0), "forearm.R": (8, 0, 0),
             "fingers.L": (-25, 0, 0), "fingers.R": (10, 0, 0),
             "thigh.L": (-4, 0, 0), "shin.L": (6, 0, 0), "foot.L": (30, 0, 0), "toes.L": (25, 0, 0),
             "thigh.R": (-10, 0, 0), "shin.R": (10, 0, 0), "foot.R": (30, 0, 0), "toes.R": (25, 0, 0)}),
@@ -1344,10 +1372,10 @@ def make_previews(arm, out, preview, poses):
         sc.frame_set(0)
         shots = []
         for i, (yaw, pitch, dist, tgt, lens) in enumerate([
-                (-28, 12, 3.2, (0, -0.05, 0.72), 50),    # 3/4 спереди
-                (90, 6, 3.2, (0, -0.05, 0.7), 50),       # профиль
-                (160, 25, 3.2, (0, 0.0, 0.75), 50),      # со спины
-                (-15, 8, 0.95, (0, -0.38, 1.22), 60)]):  # морда крупно
+                (-28, 12, 3.0, (0, -0.05, 0.55), 50),    # 3/4 спереди
+                (90, 6, 3.0, (0, -0.05, 0.52), 50),      # профиль
+                (160, 25, 3.0, (0, 0.0, 0.55), 50),      # со спины
+                (-15, 8, 0.95, (0, -0.38, 1.03), 60)]):  # морда крупно
             aim(cam, tgt, yaw, pitch, dist, lens)
             p = os.path.join(tmp, f"v{i}.png")
             render(p, 700, 900)
@@ -1415,6 +1443,11 @@ def main():
         bpy.ops.object.join()
     body = objs[0]
     body.name = body.data.name = "Ghoul_Body"
+    # короткие ноги: сжать вершины по весам ног
+    leg_groups = {g.index for g in body.vertex_groups if g.name.startswith(LEG_BONES)}
+    for v in body.data.vertices:
+        legw = sum(g.weight for g in v.groups if g.group in leg_groups)
+        v.co = squash(v.co, min(1.0, legw))
     tris = sum(len(p.vertices) - 2 for p in body.data.polygons)
     print(f"[ghoul] triangles: {tris}, verts: {len(body.data.vertices)}")
 
