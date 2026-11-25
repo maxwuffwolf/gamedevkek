@@ -26,7 +26,7 @@ namespace Game.Editor
         /// Версия настроек атмосферы. Если поднять её, при следующей пересборке сцены профиль пост-обработки
         /// и материалы (эффекты, окружение) перезапишутся значениями из кода. Иначе ручные правки сохраняются.
         /// </summary>
-        public const int SettingsVersion = 8;
+        public const int SettingsVersion = 11;
         private const string VersionKey = "Game.Atmosphere.SettingsVersion";
 
         /// <summary>true, пока идёт пересборка, где ассеты нужно обновить до <see cref="SettingsVersion"/>.</summary>
@@ -176,14 +176,14 @@ namespace Game.Editor
             bloom.highQualityFiltering.Override(true);
 
             var color = Add<ColorAdjustments>(profile);
-            color.postExposure.Override(0.85f);
+            color.postExposure.Override(0.95f);
             color.contrast.Override(20f);
             color.saturation.Override(6f);
 
             // тени чуть опускаем и холодим (было: подняты — отсюда «серость»), света слегка тёплые
             var lgg = Add<LiftGammaGain>(profile);
             lgg.lift.Override(new Vector4(1f, 1f, 1.04f, 0f)); // без отрицательного сдвига: он даёт цветные «кольца» в тёмных местах
-            lgg.gamma.Override(new Vector4(1f, 1f, 1f, 0f));
+            lgg.gamma.Override(new Vector4(1f, 1f, 1f, 0.22f)); // гамма вверх: средние и тёмные тона светлее, детали читаются, ночь остаётся
             lgg.gain.Override(new Vector4(1.04f, 1f, 0.95f, 0.03f));
 
             var wb = Add<WhiteBalance>(profile);
