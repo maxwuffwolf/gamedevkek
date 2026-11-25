@@ -942,53 +942,51 @@ def idle_pose(ph):
     }
 
 
-LEAN0, LEAN1, CROUCH = 42.0, 8.0, 1.0
+LEAN0, LEAN1 = 46.0, 6.0
 
 
 def quad_pose(ph, run, lean=None):
-    """На четвереньках: корпус наклонён вперёд, длинные лапы — передние ноги.
-    run 0 — крадущийся четырёхтактный шаг (ЗЛ, ПЛ, ЗП, ПП), run 1 — галоп: задние вместе, передние вместе."""
+    """Ползком на четырёх лапах, как упырь: корпус низко над землёй, локти и колени в стороны,
+    лапы переставляются по диагонали (задняя левая с передней правой) — ползёт, а не скачет.
+    run 0 — крадётся, run 1 — быстро стелется по земле (та же походка, чаще и шире шаг)."""
     a = TAU * ph
-    # фазы ног: шаг — по очереди, галоп — пары с небольшим разносом
-    if run > 0.5:
-        phase = {"thigh.L": 0.0, "thigh.R": 0.1, "upperarm.L": 0.5, "upperarm.R": 0.6}
-    else:
-        phase = {"thigh.L": 0.0, "upperarm.L": 0.25, "thigh.R": 0.5, "upperarm.R": 0.75}
-    amp_leg = 22 + 16 * run
-    amp_arm = 24 + 20 * run
+    # диагональные пары, у шага — с небольшим разносом (четырёхтакт), у бега — почти вместе
+    d = 0.12 * (1 - run) + 0.04 * run
+    phase = {"thigh.L": 0.0, "upperarm.R": d, "thigh.R": 0.5, "upperarm.L": 0.5 + d}
+    amp_leg = 20 + 10 * run
+    amp_arm = 22 + 14 * run
+    crouch = 1.15 + 0.1 * run
     pose = {}
     for s in ("L", "R"):
+        out = -1 if s == "L" else 1  # знак roll «наружу»
         x = a - TAU * phase["thigh." + s]
-        lift = max(0.0, C(x))  # перенос ноги (нога в воздухе)
-        # присед: колени вперёд, голень назад — таз низко, спина почти горизонтально
-        pose["thigh." + s] = (-14 - 22 * CROUCH - LEAN0 - LEAN1 * run - amp_leg * S(x), 0, 0)
-        pose["shin." + s] = (14 + 34 * CROUCH - (22 + 22 * run) * lift, 0, 0)
-        pose["foot." + s] = (-6 - 14 * CROUCH + (18 + 18 * run) * lift - 10 * S(x), 0, 0)
+        lift = max(0.0, C(x)) ** 1.5  # невысокий перенос — лапа скользит над землёй
+        pose["thigh." + s] = (-14 - 22 * crouch - LEAN0 - LEAN1 * run - amp_leg * S(x), 16 * out, 0)
+        pose["shin." + s] = (14 + 34 * crouch - (8 + 6 * run) * lift, 0, 0)
+        pose["foot." + s] = (-6 - 14 * crouch + (14 + 8 * run) * lift - 8 * S(x), 0, 0)
         pose["toes." + s] = (-14 * max(0.0, -S(x)), 0, 0)
         x = a - TAU * phase["upperarm." + s]
-        lift = max(0.0, C(x))
-        # база -62°: лапа вытянута вперёд-вниз к земле; вынос вперёд в фазе переноса
-        # лапа примерно отвесно к земле при любом наклоне корпуса, качается вперёд-назад
-        tilt = LEAN0 + LEAN1 * run + 14 + 10
-        pose["upperarm." + s] = (-tilt + 18 - amp_arm * S(x), -6 if s == "L" else 6, 0)
-        pose["forearm." + s] = (10 - (30 + 25 * run) * lift, 0, 0)
-        pose["hand." + s] = (26 + (10 + 20 * run) * lift - 14 * S(x), 0, 0)
-        pose["fingers." + s] = (12 - 20 * lift, 0, 0)
-    # корпус почти горизонтально; в галопе спина пружинит (сжимается/разгибается)
-    flex = S(a) * (2 + 8 * run)
-    bob = abs(C(a)) if run < 0.5 else 0.5 + 0.5 * S(a + 0.6)
-    # весь корпус наклоняется вперёд вокруг стоп (ноги выше компенсируют), высоту потом ставит GROUND_FIX
+        lift = max(0.0, C(x)) ** 1.5
+        # плечо разведено в стороны, локоть согнут наружу — «паучья» постановка лап
+        tilt = LEAN0 + LEAN1 * run + 20 + 14
+        pose["upperarm." + s] = (-tilt + 50 - amp_arm * S(x), 48 * out, 0)
+        pose["forearm." + s] = (-72 - (18 + 8 * run) * lift, 0, 0)
+        pose["hand." + s] = (66 + 14 * lift - 12 * S(x), 0, 0)
+        pose["fingers." + s] = (16 - 18 * lift, 0, 0)
+    # корпус качается из стороны в сторону (как у ящерицы), почти без подпрыгиваний
+    sway = S(a)
     pose["root"] = (LEAN0 + LEAN1 * run, 0, 0)
-    pose["loc"] = (0.0, 0.12, 0.035 * bob * (0.5 + run))
-    pose["hips"] = (-4 + flex * 0.4, 3 * S(a) * (1 - run), 4 * S(a) * (1 - run))
-    pose["spine"] = (14 + flex, 0, -3 * S(a) * (1 - run))
-    pose["chest"] = (10 - flex * 0.6, -3 * S(a) * (1 - run), -4 * S(a) * (1 - run))
-    pose["clavicle.L"] = (0, 0, 0)
-    pose["neck"] = (-28, 0, 2 * S(a))
-    pose["head"] = (-24 + 4 * bob * run, 2 * S(a), 3 * S(a) * (1 - run))
-    pose["jaw"] = (-(8 + 14 * run) - 6 * bob * run, 0, 0)
-    pose["ear.L"] = (0, 0, 8 + 8 * run)
-    pose["ear.R"] = (0, 0, -8 - 8 * run)
+    pose["loc"] = (0.0, 0.12, 0.012 * abs(C(a)))
+    pose["hips"] = (-4, 4 * sway, 8 * sway)
+    pose["spine"] = (20, 0, -6 * sway)
+    pose["chest"] = (14, -4 * sway, -8 * sway)
+    pose["clavicle.L"] = (0, 10, 0)
+    pose["clavicle.R"] = (0, -10, 0)
+    pose["neck"] = (-34, 0, 5 * sway)
+    pose["head"] = (-30, 3 * sway, 6 * sway)
+    pose["jaw"] = (-(10 + 10 * run), 0, 0)
+    pose["ear.L"] = (0, 0, 10 + 8 * run)
+    pose["ear.R"] = (0, 0, -10 - 8 * run)
     return pose
 
 
@@ -1155,8 +1153,8 @@ def spline_poses(seq, t):
 # имя: (кадров, петля, функция фазы → поза)
 ANIMS = {
     "Idle": (60, True, lambda ph: idle_pose(ph)),
-    "Walk": (36, True, lambda ph: quad_pose(ph, 0.0)),
-    "Run": (18, True, lambda ph: quad_pose(ph, 1.0)),
+    "Walk": (40, True, lambda ph: quad_pose(ph, 0.0)),
+    "Run": (22, True, lambda ph: quad_pose(ph, 1.0)),
     "Attack": (26, False, lambda ph: add(scale(idle_pose(0), 1 - ph), keyposes(ATTACK, ph))),
     "Hit": (10, False, lambda ph: add(scale(idle_pose(0), 1.0), keyposes(HIT, ph))),
     "Death": (54, False, lambda ph: add(scale(idle_pose(0), max(0.0, 1 - ph * 2.5)), spline_poses(DEATH, ph))),
@@ -1164,7 +1162,7 @@ ANIMS = {
 
 # клипы, где тело ложится на землю: корень приподнимается ровно настолько, чтобы ничто не ушло под землю
 # "lift" — только приподнять (смерть, бег с фазой полёта); "contact" — держать нижнюю точку на земле (шаг)
-GROUND_FIX = {"Death": "lift", "Walk": "contact", "Run": "lift"}
+GROUND_FIX = {"Death": "lift", "Walk": "contact", "Run": "contact"}
 
 
 def lowest_z(body):
