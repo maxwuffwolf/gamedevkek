@@ -21,6 +21,9 @@ namespace Game.Gameplay.Actors
         private const float SeparationStrength = 7f;
         private const float SeparationMaxSpeed = 3f;
         private bool _isMonster;
+        // стабильный угол разведения для мобов в одной точке (GetInstanceID в Unity 6.6 устарел и ломает сборку)
+        private static int s_separationCounter;
+        private readonly float _separationAngle = (++s_separationCounter * 47) % 360;
 
         public Vector3 Velocity { get; private set; }
         public float NormalizedSpeed { get; private set; }
@@ -63,7 +66,7 @@ namespace Game.Gameplay.Actors
                 if (dist >= min) continue;
                 // ровно в одной точке — разводим в случайную, но стабильную сторону
                 Vector3 dir = dist > 0.001f ? d / dist
-                    : Quaternion.Euler(0f, (GetInstanceID() * 47) % 360, 0f) * Vector3.forward;
+                    : Quaternion.Euler(0f, _separationAngle, 0f) * Vector3.forward;
                 push += dir * ((min - dist) * SeparationStrength);
             }
             return Vector3.ClampMagnitude(push, SeparationMaxSpeed);
