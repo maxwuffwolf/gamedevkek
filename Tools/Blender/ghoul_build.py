@@ -131,7 +131,7 @@ BONE_SEG = {b[0]: (b[1], b[2]) for b in BONES}
 
 # Короткие задние лапы: модель строится в «длинноногих» координатах выше, а потом ноги сжимаются по высоте,
 # а всё, что выше таза, опускается на ту же величину (руки почти достают земли — упырь ползает на них).
-LEG_K = 0.72  # доля исходной длины ног
+LEG_K = 1.0  # доля исходной длины ног (0.72 — короткие лапы под ползание на четвереньках)
 HIP_Z = J["pelvis"].z
 LEG_DROP = HIP_Z * (1 - LEG_K)
 LEG_BONES = ("thigh.", "shin.", "foot.", "toes.")
@@ -1402,8 +1402,9 @@ def spline_poses(seq, t):
 # имя: (кадров, петля, функция фазы → поза)
 ANIMS = {
     "Idle": (60, True, lambda ph: idle_pose(ph)),
-    "Walk": (40, True, lambda ph: quad_pose(ph, 0.0)),
-    "Run": (22, True, lambda ph: quad_pose(ph, 1.0)),
+    # 2026-11-27: Max вернул прямохождение на двух ногах; quad_pose оставлен на случай возврата к ползанию
+    "Walk": (36, True, lambda ph: gait_pose(ph, 0.0)),
+    "Run": (20, True, lambda ph: gait_pose(ph, 1.0)),
     "Attack": (26, False, lambda ph: add(scale(idle_pose(0), 1 - ph), keyposes(ATTACK, ph))),
     "Hit": (10, False, lambda ph: add(scale(idle_pose(0), 1.0), keyposes(HIT, ph))),
     "Death": (54, False, lambda ph: add(scale(idle_pose(0), max(0.0, 1 - ph * 2.5)), spline_poses(DEATH, ph))),
