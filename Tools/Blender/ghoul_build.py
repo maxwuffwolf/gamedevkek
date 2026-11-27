@@ -43,11 +43,12 @@ MAT_GLOW = "M_Ghoul_Glow"  # глаза и споровые грибы (свеч
 
 # ---------------------------------------------------------------- палитра (sRGB)
 
-SKIN = (0.43, 0.47, 0.41)        # пепельно-зелёная шкура
+SKIN = (0.42, 0.49, 0.39)        # пепельно-зелёная шкура
 SKIN_LIGHT = (0.62, 0.62, 0.53)  # брюхо, горло
 SKIN_DARK = (0.22, 0.25, 0.25)   # спина, пятна
 SKIN_DEEP = (0.13, 0.13, 0.15)   # кисти, стопы
-MOTTLE = (0.30, 0.31, 0.36)      # холодные синяки-пятна
+MOTTLE = (0.33, 0.28, 0.38)      # лиловые синяки-пятна
+VEIN = (0.17, 0.15, 0.24)        # тёмные прожилки под кожей
 SCAR = (0.55, 0.36, 0.34)
 CLAW = (0.10, 0.08, 0.08)
 CLAW_TIP = (0.55, 0.50, 0.40)
@@ -151,6 +152,13 @@ def squash_bone(name, co):
 # ---------------------------------------------------------------- сборка кусков с весами
 
 PARTS = []  # (obj, bones|None, rigid_bone|None)
+SUBD_LEVEL = 1  # 0 = старый гранёный low-poly
+HARD_PARTS = ("Ghoul_Teeth", "Ghoul_Spores", "Ghoul_Necklace")
+# куски, которые сливаются в одну цельную «вылепленную» кожу (voxel remesh): без шаров-суставов и стыков
+SKIN_PARTS = ("Ghoul_Torso", "Ghoul_Ribs", "Ghoul_Spine", "Ghoul_Neck", "Ghoul_Head", "Ghoul_Arm_", "Ghoul_Leg_")
+SKIN_VOXEL = 0.0045
+SKIN_TRIS = 16000
+PART_INFO = {}  # name -> (color_fn, bones, rigid)
 
 
 def new_part(name, build, color, material=MAT, bones=None, rigid=None):
@@ -165,15 +173,218 @@ def new_part(name, build, color, material=MAT, bones=None, rigid=None):
     for m in (MAT, MAT_2S, MAT_GLOW):  # одинаковый порядок слотов во всех кусках — join не путает материалы
         mesh.materials.append(bpy.data.materials.get(m) or bpy.data.materials.new(m))
     slot = (MAT, MAT_2S, MAT_GLOW).index(material)
-    attr = mesh.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+    soft = SUBD_LEVEL > 0 and not name.startswith(HARD_PARTS)
+    skin = SUBD_LEVEL > 0 and name.startswith(SKIN_PARTS)
+    PART_INFO[name] = (color, bones, rigid)
     for p in mesh.polygons:
-        p.use_smooth = False
         p.material_index = slot
-        c = color(Vector(p.center), Vector(p.normal), p)
-        for li in p.loop_indices:
-            attr.data[li].color_srgb = (c[0], c[1], c[2], 1.0)
+    if soft:
+        # сглаженная «альбионная» форма: Катмулл-Кларк + мягкие нормали
+        mod = obj.modifiers.new("Subd", "SUBSURF")
+        mod.levels = mod.render_levels = 2 if skin else SUBD_LEVEL
+        mod.quality = 3
+        with bpy.context.temp_override(object=obj, active_object=obj, selected_objects=[obj]):
+            bpy.ops.object.modifier_apply(modifier=mod.name)
+    attr = mesh.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+    verts = mesh.vertices
+    for p in mesh.polygons:
+        p.use_smooth = soft
+        if soft:
+            # краска по вершинам — плавные переходы, как у рисованной текстуры
+            for li in p.loop_indices:
+                v = verts[mesh.loops[li].vertex_index]
+                c = color(Vector(v.co), Vector(v.normal), p)
+                attr.data[li].color_srgb = (c[0], c[1], c[2], 1.0)
+        else:
+            c = color(Vector(p.center), Vector(p.normal), p)
+            for li in p.loop_indices:
+                attr.data[li].color_srgb = (c[0], c[1], c[2], 1.0)
     PARTS.append((obj, bones, rigid))
     return obj
+
+
+def apply_mod(obj, kind, **kw):
+    mod = obj.modifiers.new(kind, kind)
+    for k, v in kw.items():
+        setattr(mod, k, v)
+    with bpy.context.temp_override(object=obj, active_object=obj, selected_objects=[obj]):
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+
+
+def merge_skin():
+    """Тело, шея, голова, руки и ноги -> одна цельная кожа: remesh сливает стыки в мягкие переходы,
+    цвет и веса каждой вершины берутся у ближайшего исходного куска."""
+    from mathutils.bvhtree import BVHTree
+    skin = [(o, b, r) for o, b, r in PARTS if o.name.startswith(SKIN_PARTS)]
+    if not skin:
+        return
+    trees = []
+    for o, _, _ in skin:
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        trees.append((o.name, BVHTree.FromBMesh(bm)))
+        bm.free()
+    # копия кусков -> одна сетка
+    copies = []
+    for o, _, _ in skin:
+        c = o.copy()
+        c.data = o.data.copy()
+        c.vertex_groups.clear()
+        bpy.context.scene.collection.objects.link(c)
+        copies.append(c)
+    with bpy.context.temp_override(active_object=copies[0], object=copies[0], selected_objects=copies,
+                                   selected_editable_objects=copies):
+        bpy.ops.object.join()
+    sk = copies[0]
+    sk.name = sk.data.name = "Ghoul_Skin"
+    apply_mod(sk, "REMESH", mode="VOXEL", voxel_size=SKIN_VOXEL, adaptivity=0.0)
+    apply_mod(sk, "SMOOTH", factor=0.6, iterations=8)
+    tris = sum(len(p.vertices) - 2 for p in sk.data.polygons)
+    if tris > SKIN_TRIS:
+        apply_mod(sk, "DECIMATE", ratio=SKIN_TRIS / tris)
+    for o, _, _ in skin:
+        PARTS.remove(next(p for p in PARTS if p[0] is o))
+        bpy.data.objects.remove(o)
+    mesh = sk.data
+    mesh.materials.clear()
+    for m in (MAT, MAT_2S, MAT_GLOW):
+        mesh.materials.append(bpy.data.materials[m])
+    for a in list(mesh.color_attributes):
+        mesh.color_attributes.remove(a)
+    attr = mesh.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+    # ближайший кусок для каждой вершины
+    owner = []
+    for v in mesh.vertices:
+        best = None
+        for nm, t in trees:
+            h = t.find_nearest(v.co)
+            if h[0] is not None and (best is None or h[3] < best[1]):
+                best = (nm, h[3])
+        owner.append(best[0])
+    for p in mesh.polygons:
+        p.use_smooth = True
+        p.material_index = 0
+        for li in p.loop_indices:
+            vi = mesh.loops[li].vertex_index
+            v = mesh.vertices[vi]
+            c = PART_INFO[owner[vi]][0](Vector(v.co), Vector(v.normal), p)
+            attr.data[li].color_srgb = (c[0], c[1], c[2], 1.0)
+    # веса: обратное расстояние до костей своего куска, затем сглаживание по соседям
+    nv = len(mesh.vertices)
+    W = [dict() for _ in range(nv)]
+    for v in mesh.vertices:
+        _, bones, rigid = PART_INFO[owner[v.index]]
+        if rigid:
+            W[v.index] = {rigid: 1.0}
+            continue
+        ws = sorted(((1.0 / (seg_dist(v.co, *BONE_SEG[b]) ** 4 + 1e-7), b) for b in bones), reverse=True)[:3]
+        tot = sum(w for w, _ in ws)
+        W[v.index] = {b: w / tot for w, b in ws}
+    nbr = [[] for _ in range(nv)]
+    for e in mesh.edges:
+        a, b = e.vertices
+        nbr[a].append(b)
+        nbr[b].append(a)
+    for _ in range(3):
+        NW = []
+        for i in range(nv):
+            acc = dict((k, 0.5 * w) for k, w in W[i].items())
+            k = 0.5 / max(1, len(nbr[i]))
+            for j in nbr[i]:
+                for b, w in W[j].items():
+                    acc[b] = acc.get(b, 0.0) + k * w
+            top = sorted(acc.items(), key=lambda t: -t[1])[:3]
+            tot = sum(w for _, w in top)
+            NW.append({b: w / tot for b, w in top})
+        W = NW
+    groups = {}
+    for i, ws in enumerate(W):
+        for b, w in ws.items():
+            if w < 0.02:
+                continue
+            g = groups.get(b) or sk.vertex_groups.new(name=b)
+            groups[b] = g
+            g.add([i], w, "REPLACE")
+    PARTS.insert(0, (sk, None, "__done__"))
+    print(f"[ghoul] skin: {sum(len(p.vertices) - 2 for p in mesh.polygons)} tris")
+
+
+# ---------------------------------------------------------------- рисованная доводка (после join)
+
+def paint_pass(body):
+    """AO + кривизна + верхний свет поверх базового цвета вершин: объём как у рисованной текстуры."""
+    import bmesh as _bm
+    mesh = body.data
+    bm = _bm.new()
+    bm.from_mesh(mesh)
+    bm.verts.ensure_lookup_table()
+    n = len(bm.verts)
+    # кривизна: выпуклые рёбра светлее, впадины темнее
+    curv = [0.0] * n
+    for v in bm.verts:
+        if not v.link_edges:
+            continue
+        acc = 0.0
+        for e in v.link_edges:
+            o = e.other_vert(v)
+            d = o.co - v.co
+            if d.length > 1e-6:
+                acc += -v.normal.dot(d.normalized())
+        curv[v.index] = acc / len(v.link_edges)
+    # грубый AO: лучи по полусфере через BVH всего тела
+    from mathutils.bvhtree import BVHTree
+    tree = BVHTree.FromBMesh(bm)
+    dirs = []
+    rr = random.Random(7)
+    while len(dirs) < 24:
+        d = Vector((rr.uniform(-1, 1), rr.uniform(-1, 1), rr.uniform(-1, 1)))
+        if 0.05 < d.length <= 1.0:
+            dirs.append(d.normalized())
+    ao = [1.0] * n
+    for v in bm.verts:
+        nv = v.normal
+        if nv.length < 0.5:
+            continue
+        hits = tot = 0.0
+        for d in dirs:
+            c = d.dot(nv)
+            if c <= 0.05:
+                d = -d
+                c = -c
+            if c <= 0.05:
+                continue
+            tot += c
+            h = tree.ray_cast(v.co + nv * 0.003, d, 0.18)
+            if h[0] is not None:
+                hits += c * (1.0 - h[3] / 0.18) ** 0.5
+        ao[v.index] = 1.0 - (hits / tot if tot else 0.0)
+    # мягкое размытие по соседям, чтобы не было рябки
+    for _ in range(2):
+        ao = [0.5 * ao[v.index] + 0.5 * sum(ao[e.other_vert(v).index] for e in v.link_edges) / max(1, len(v.link_edges))
+              for v in bm.verts]
+        curv = [0.5 * curv[v.index] + 0.5 * sum(curv[e.other_vert(v).index] for e in v.link_edges) / max(1, len(v.link_edges))
+                for v in bm.verts]
+    normals = [Vector(v.normal) for v in bm.verts]
+    bm.free()
+    attr = mesh.color_attributes["Col"]
+    glow_slot = 2
+    for p in mesh.polygons:
+        if p.material_index == glow_slot:
+            continue
+        for li in p.loop_indices:
+            vi = mesh.loops[li].vertex_index
+            r, g, b, a = attr.data[li].color_srgb
+            k = 0.3 + 0.7 * ao[vi] ** 1.6                       # впадины, подмышки, под брюхом
+            cv = max(-1.0, min(1.0, curv[vi] * 30.0))
+            k *= 1.0 + 0.3 * max(0.0, cv) - 0.25 * max(0.0, -cv)  # блик на рёбрах / грязь в складках
+            up = normals[vi].z
+            k *= 1.0 + 0.12 * max(0.0, up) - 0.08 * max(0.0, -up)  # «нарисованный» свет сверху
+            # тёплый отсвет в тени, холодный блик сверху — как кистью
+            r2, g2, b2 = r * k, g * k, b * k
+            if k < 0.8:
+                t = (0.8 - k) * 0.35
+                r2, g2, b2 = r2 + t * 0.06, g2 - t * 0.01, b2 + t * 0.05
+            attr.data[li].color_srgb = (min(1.0, r2), min(1.0, g2), min(1.0, b2), a)
 
 
 def seg_dist(p, a, b):
@@ -219,6 +430,12 @@ def skin_col(seed=0.0, dark_ends=True):
         m = smooth(0.58, 0.72, n01(c, 7.0, (seed, 2.0, 0.3)))
         col = lerp3(col, MOTTLE, m * 0.55)
         col = lerp3(col, SKIN_DARK, smooth(0.62, 0.8, n01(c, 15.0, (0, seed, 7))) * 0.4)
+        # прожилки: тонкие тёмные линии по изолинии шума (заметны только на плавной коже)
+        if SUBD_LEVEL > 0:
+            vn = abs(n01(c, 9.0, (seed, 5.0, 1.0)) - 0.5)
+            col = lerp3(col, VEIN, smooth(0.025, 0.0, vn) * 0.45 * smooth(0.45, 0.55, n01(c, 3.0, (1, seed, 4))))
+            # тёплый подтон на сгибах и брюхе — живая кожа, а не пластик
+            col = lerp3(col, (0.5, 0.4, 0.36), 0.18 * belly)
         # грязь снизу
         col = lerp3(col, SOOT, 0.35 * smooth(0.45, 0.05, c.z))
         if dark_ends:
@@ -563,12 +780,14 @@ def build_arms(rng):
 
         def geo(bm, sh=sh, el=el, wr=wr, kn=kn, sx=sx):
             # плечо — мясистый «бугор» дельты
-            ico(bm, sh + V((0.01 * sx, 0.0, 0.01)), 0.058, scale=(1.0, 1.0, 1.15), subdiv=1)
-            up = [sh, sh + (el - sh) * 0.35, sh + (el - sh) * 0.7, el]
-            sweep(bm, up, [0.05, 0.046, 0.036, 0.034], seg=8, sx=1.0, sy=0.9, ref=(1, 0, 0))
-            ico(bm, el + V((0, 0.012, 0)), 0.036, scale=(1.0, 1.2, 1.0), subdiv=1)  # острый локоть
-            lo = [el, el + (wr - el) * 0.3, el + (wr - el) * 0.7, wr]
-            sweep(bm, lo, [0.036, 0.04, 0.03, 0.026], seg=8, sx=1.0, sy=0.8, ref=(1, 0, 0))
+            ico(bm, sh + V((0.004 * sx, 0.0, 0.0)) + (el - sh) * 0.1, 0.05, scale=(0.95, 1.0, 1.35), subdiv=2)
+            # жилистое плечо: дельта -> бицепс -> тонкий перехват над локтем
+            up = [sh + (el - sh) * k for k in (0.0, 0.18, 0.4, 0.62, 0.82, 1.0)]
+            sweep(bm, up, [0.05, 0.047, 0.042, 0.04, 0.035, 0.034], seg=10, sx=1.0, sy=0.9, ref=(1, 0, 0))
+            ico(bm, el + V((0, 0.016, 0)), 0.027, scale=(0.9, 1.3, 0.9), subdiv=2)  # острый локоть
+            # предплечье: толстое у локтя, сухое к запястью
+            lo = [el + (wr - el) * k for k in (0.0, 0.15, 0.35, 0.6, 0.85, 1.0)]
+            sweep(bm, lo, [0.034, 0.04, 0.038, 0.03, 0.025, 0.025], seg=10, sx=1.0, sy=0.8, ref=(1, 0, 0))
             # кисть: ладонь
             sweep(bm, [wr, wr + (kn - wr) * 0.5, kn], [0.028, 0.034, 0.03], seg=6, sx=0.6, sy=1.0, ref=(1, 0, 0))
 
@@ -633,12 +852,14 @@ def build_legs(rng):
         hp, kn, hk, bl, to = (J[k + "_" + s] for k in ("hip", "knee", "hock", "ball", "toe"))
 
         def geo(bm, hp=hp, kn=kn, hk=hk, bl=bl, to=to, sx=sx):
-            thigh = [hp + V((0, 0.01, 0.04)), hp + (kn - hp) * 0.4 + V((0, 0.015, 0)), kn]
-            sweep(bm, thigh, [0.075, 0.064, 0.045], seg=9, sx=1.0, sy=1.1, ref=(1, 0, 0))
-            ico(bm, kn + V((0, -0.012, 0.005)), 0.044, scale=(1.0, 1.1, 1.0), subdiv=1)  # колено
-            shin = [kn, kn + (hk - kn) * 0.35 + V((0, -0.01, 0)), hk]
-            sweep(bm, shin, [0.042, 0.04, 0.026], seg=8, sx=1.0, sy=1.1, ref=(1, 0, 0))
-            ico(bm, hk + V((0, 0.012, 0)), 0.03, scale=(1.0, 1.25, 1.0), subdiv=1)  # пятка-скакательный сустав
+            thigh = [hp + V((0, 0.01, 0.04)), hp + (kn - hp) * 0.3 + V((0, 0.012, 0)),
+                     hp + (kn - hp) * 0.62 + V((0, 0.008, 0)), hp + (kn - hp) * 0.86, kn]
+            sweep(bm, thigh, [0.075, 0.07, 0.06, 0.048, 0.043], seg=10, sx=1.0, sy=1.1, ref=(1, 0, 0))
+            ico(bm, kn + V((0, -0.016, 0.004)), 0.034, scale=(1.0, 1.1, 1.0), subdiv=2)  # колено
+            shin = [kn, kn + (hk - kn) * 0.2 + V((0, 0.004, 0)), kn + (hk - kn) * 0.45 + V((0, -0.006, 0)),
+                    kn + (hk - kn) * 0.75, hk]
+            sweep(bm, shin, [0.042, 0.044, 0.036, 0.028, 0.026], seg=10, sx=1.0, sy=1.1, ref=(1, 0, 0))
+            ico(bm, hk + V((0, 0.014, 0)), 0.024, scale=(1.0, 1.3, 1.0), subdiv=2)  # пятка-скакательный сустав
             sweep(bm, [hk, (hk + bl) / 2, bl], [0.027, 0.024, 0.026], seg=7, sx=1.0, sy=0.85, ref=(1, 0, 0))
             # три пальца с когтями
             for off in (-1, 0, 1):
@@ -1435,8 +1656,11 @@ def main():
     build_wraps(rng)
     build_fungus(rng)
 
+    if SUBD_LEVEL > 0:
+        merge_skin()
     for obj, bones, rigid in PARTS:
-        assign_weights(obj, bones, rigid)
+        if rigid != "__done__":
+            assign_weights(obj, bones, rigid)
     objs = [p[0] for p in PARTS]
     with bpy.context.temp_override(active_object=objs[0], object=objs[0], selected_objects=objs,
                                    selected_editable_objects=objs):
@@ -1448,6 +1672,8 @@ def main():
     for v in body.data.vertices:
         legw = sum(g.weight for g in v.groups if g.group in leg_groups)
         v.co = squash(v.co, min(1.0, legw))
+    if SUBD_LEVEL > 0:
+        paint_pass(body)
     tris = sum(len(p.vertices) - 2 for p in body.data.polygons)
     print(f"[ghoul] triangles: {tris}, verts: {len(body.data.vertices)}")
 
