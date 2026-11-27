@@ -43,11 +43,12 @@ MAT_GLOW = "M_Ghoul_Glow"  # глаза и споровые грибы (свеч
 
 # ---------------------------------------------------------------- палитра (sRGB)
 
-SKIN = (0.43, 0.47, 0.41)        # пепельно-зелёная шкура
+SKIN = (0.42, 0.49, 0.39)        # пепельно-зелёная шкура
 SKIN_LIGHT = (0.62, 0.62, 0.53)  # брюхо, горло
 SKIN_DARK = (0.22, 0.25, 0.25)   # спина, пятна
 SKIN_DEEP = (0.13, 0.13, 0.15)   # кисти, стопы
-MOTTLE = (0.30, 0.31, 0.36)      # холодные синяки-пятна
+MOTTLE = (0.33, 0.28, 0.38)      # лиловые синяки-пятна
+VEIN = (0.17, 0.15, 0.24)        # тёмные прожилки под кожей
 SCAR = (0.55, 0.36, 0.34)
 CLAW = (0.10, 0.08, 0.08)
 CLAW_TIP = (0.55, 0.50, 0.40)
@@ -128,10 +129,36 @@ for s in ("L", "R"):
     ]
 BONE_SEG = {b[0]: (b[1], b[2]) for b in BONES}
 
+# Короткие задние лапы: модель строится в «длинноногих» координатах выше, а потом ноги сжимаются по высоте,
+# а всё, что выше таза, опускается на ту же величину (руки почти достают земли — упырь ползает на них).
+LEG_K = 0.72  # доля исходной длины ног
+HIP_Z = J["pelvis"].z
+LEG_DROP = HIP_Z * (1 - LEG_K)
+LEG_BONES = ("thigh.", "shin.", "foot.", "toes.")
+
+
+def squash(co, legw):
+    """legw — насколько точка принадлежит ноге (0 — корпус/руки, 1 — нога)."""
+    z = co.z * LEG_K * legw + (co.z - LEG_DROP) * (1 - legw)
+    return V((co.x, co.y, z))
+
+
+def squash_bone(name, co):
+    if name == "root":
+        return co
+    return squash(co, 1.0 if name.startswith(LEG_BONES) else 0.0)
+
 
 # ---------------------------------------------------------------- сборка кусков с весами
 
 PARTS = []  # (obj, bones|None, rigid_bone|None)
+SUBD_LEVEL = 1  # 0 = старый гранёный low-poly
+HARD_PARTS = ("Ghoul_Teeth", "Ghoul_Spores", "Ghoul_Necklace")
+# куски, которые сливаются в одну цельную «вылепленную» кожу (voxel remesh): без шаров-суставов и стыков
+SKIN_PARTS = ("Ghoul_Torso", "Ghoul_Ribs", "Ghoul_Spine", "Ghoul_Neck", "Ghoul_Head", "Ghoul_Arm_", "Ghoul_Leg_")
+SKIN_VOXEL = 0.0045
+SKIN_TRIS = 16000
+PART_INFO = {}  # name -> (color_fn, bones, rigid)
 
 
 def new_part(name, build, color, material=MAT, bones=None, rigid=None):
@@ -146,15 +173,218 @@ def new_part(name, build, color, material=MAT, bones=None, rigid=None):
     for m in (MAT, MAT_2S, MAT_GLOW):  # одинаковый порядок слотов во всех кусках — join не путает материалы
         mesh.materials.append(bpy.data.materials.get(m) or bpy.data.materials.new(m))
     slot = (MAT, MAT_2S, MAT_GLOW).index(material)
-    attr = mesh.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+    soft = SUBD_LEVEL > 0 and not name.startswith(HARD_PARTS)
+    skin = SUBD_LEVEL > 0 and name.startswith(SKIN_PARTS)
+    PART_INFO[name] = (color, bones, rigid)
     for p in mesh.polygons:
-        p.use_smooth = False
         p.material_index = slot
-        c = color(Vector(p.center), Vector(p.normal), p)
-        for li in p.loop_indices:
-            attr.data[li].color_srgb = (c[0], c[1], c[2], 1.0)
+    if soft:
+        # сглаженная «альбионная» форма: Катмулл-Кларк + мягкие нормали
+        mod = obj.modifiers.new("Subd", "SUBSURF")
+        mod.levels = mod.render_levels = 2 if skin else SUBD_LEVEL
+        mod.quality = 3
+        with bpy.context.temp_override(object=obj, active_object=obj, selected_objects=[obj]):
+            bpy.ops.object.modifier_apply(modifier=mod.name)
+    attr = mesh.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+    verts = mesh.vertices
+    for p in mesh.polygons:
+        p.use_smooth = soft
+        if soft:
+            # краска по вершинам — плавные переходы, как у рисованной текстуры
+            for li in p.loop_indices:
+                v = verts[mesh.loops[li].vertex_index]
+                c = color(Vector(v.co), Vector(v.normal), p)
+                attr.data[li].color_srgb = (c[0], c[1], c[2], 1.0)
+        else:
+            c = color(Vector(p.center), Vector(p.normal), p)
+            for li in p.loop_indices:
+                attr.data[li].color_srgb = (c[0], c[1], c[2], 1.0)
     PARTS.append((obj, bones, rigid))
     return obj
+
+
+def apply_mod(obj, kind, **kw):
+    mod = obj.modifiers.new(kind, kind)
+    for k, v in kw.items():
+        setattr(mod, k, v)
+    with bpy.context.temp_override(object=obj, active_object=obj, selected_objects=[obj]):
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+
+
+def merge_skin():
+    """Тело, шея, голова, руки и ноги -> одна цельная кожа: remesh сливает стыки в мягкие переходы,
+    цвет и веса каждой вершины берутся у ближайшего исходного куска."""
+    from mathutils.bvhtree import BVHTree
+    skin = [(o, b, r) for o, b, r in PARTS if o.name.startswith(SKIN_PARTS)]
+    if not skin:
+        return
+    trees = []
+    for o, _, _ in skin:
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        trees.append((o.name, BVHTree.FromBMesh(bm)))
+        bm.free()
+    # копия кусков -> одна сетка
+    copies = []
+    for o, _, _ in skin:
+        c = o.copy()
+        c.data = o.data.copy()
+        c.vertex_groups.clear()
+        bpy.context.scene.collection.objects.link(c)
+        copies.append(c)
+    with bpy.context.temp_override(active_object=copies[0], object=copies[0], selected_objects=copies,
+                                   selected_editable_objects=copies):
+        bpy.ops.object.join()
+    sk = copies[0]
+    sk.name = sk.data.name = "Ghoul_Skin"
+    apply_mod(sk, "REMESH", mode="VOXEL", voxel_size=SKIN_VOXEL, adaptivity=0.0)
+    apply_mod(sk, "SMOOTH", factor=0.6, iterations=8)
+    tris = sum(len(p.vertices) - 2 for p in sk.data.polygons)
+    if tris > SKIN_TRIS:
+        apply_mod(sk, "DECIMATE", ratio=SKIN_TRIS / tris)
+    for o, _, _ in skin:
+        PARTS.remove(next(p for p in PARTS if p[0] is o))
+        bpy.data.objects.remove(o)
+    mesh = sk.data
+    mesh.materials.clear()
+    for m in (MAT, MAT_2S, MAT_GLOW):
+        mesh.materials.append(bpy.data.materials[m])
+    for a in list(mesh.color_attributes):
+        mesh.color_attributes.remove(a)
+    attr = mesh.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
+    # ближайший кусок для каждой вершины
+    owner = []
+    for v in mesh.vertices:
+        best = None
+        for nm, t in trees:
+            h = t.find_nearest(v.co)
+            if h[0] is not None and (best is None or h[3] < best[1]):
+                best = (nm, h[3])
+        owner.append(best[0])
+    for p in mesh.polygons:
+        p.use_smooth = True
+        p.material_index = 0
+        for li in p.loop_indices:
+            vi = mesh.loops[li].vertex_index
+            v = mesh.vertices[vi]
+            c = PART_INFO[owner[vi]][0](Vector(v.co), Vector(v.normal), p)
+            attr.data[li].color_srgb = (c[0], c[1], c[2], 1.0)
+    # веса: обратное расстояние до костей своего куска, затем сглаживание по соседям
+    nv = len(mesh.vertices)
+    W = [dict() for _ in range(nv)]
+    for v in mesh.vertices:
+        _, bones, rigid = PART_INFO[owner[v.index]]
+        if rigid:
+            W[v.index] = {rigid: 1.0}
+            continue
+        ws = sorted(((1.0 / (seg_dist(v.co, *BONE_SEG[b]) ** 4 + 1e-7), b) for b in bones), reverse=True)[:3]
+        tot = sum(w for w, _ in ws)
+        W[v.index] = {b: w / tot for w, b in ws}
+    nbr = [[] for _ in range(nv)]
+    for e in mesh.edges:
+        a, b = e.vertices
+        nbr[a].append(b)
+        nbr[b].append(a)
+    for _ in range(3):
+        NW = []
+        for i in range(nv):
+            acc = dict((k, 0.5 * w) for k, w in W[i].items())
+            k = 0.5 / max(1, len(nbr[i]))
+            for j in nbr[i]:
+                for b, w in W[j].items():
+                    acc[b] = acc.get(b, 0.0) + k * w
+            top = sorted(acc.items(), key=lambda t: -t[1])[:3]
+            tot = sum(w for _, w in top)
+            NW.append({b: w / tot for b, w in top})
+        W = NW
+    groups = {}
+    for i, ws in enumerate(W):
+        for b, w in ws.items():
+            if w < 0.02:
+                continue
+            g = groups.get(b) or sk.vertex_groups.new(name=b)
+            groups[b] = g
+            g.add([i], w, "REPLACE")
+    PARTS.insert(0, (sk, None, "__done__"))
+    print(f"[ghoul] skin: {sum(len(p.vertices) - 2 for p in mesh.polygons)} tris")
+
+
+# ---------------------------------------------------------------- рисованная доводка (после join)
+
+def paint_pass(body):
+    """AO + кривизна + верхний свет поверх базового цвета вершин: объём как у рисованной текстуры."""
+    import bmesh as _bm
+    mesh = body.data
+    bm = _bm.new()
+    bm.from_mesh(mesh)
+    bm.verts.ensure_lookup_table()
+    n = len(bm.verts)
+    # кривизна: выпуклые рёбра светлее, впадины темнее
+    curv = [0.0] * n
+    for v in bm.verts:
+        if not v.link_edges:
+            continue
+        acc = 0.0
+        for e in v.link_edges:
+            o = e.other_vert(v)
+            d = o.co - v.co
+            if d.length > 1e-6:
+                acc += -v.normal.dot(d.normalized())
+        curv[v.index] = acc / len(v.link_edges)
+    # грубый AO: лучи по полусфере через BVH всего тела
+    from mathutils.bvhtree import BVHTree
+    tree = BVHTree.FromBMesh(bm)
+    dirs = []
+    rr = random.Random(7)
+    while len(dirs) < 24:
+        d = Vector((rr.uniform(-1, 1), rr.uniform(-1, 1), rr.uniform(-1, 1)))
+        if 0.05 < d.length <= 1.0:
+            dirs.append(d.normalized())
+    ao = [1.0] * n
+    for v in bm.verts:
+        nv = v.normal
+        if nv.length < 0.5:
+            continue
+        hits = tot = 0.0
+        for d in dirs:
+            c = d.dot(nv)
+            if c <= 0.05:
+                d = -d
+                c = -c
+            if c <= 0.05:
+                continue
+            tot += c
+            h = tree.ray_cast(v.co + nv * 0.003, d, 0.18)
+            if h[0] is not None:
+                hits += c * (1.0 - h[3] / 0.18) ** 0.5
+        ao[v.index] = 1.0 - (hits / tot if tot else 0.0)
+    # мягкое размытие по соседям, чтобы не было рябки
+    for _ in range(2):
+        ao = [0.5 * ao[v.index] + 0.5 * sum(ao[e.other_vert(v).index] for e in v.link_edges) / max(1, len(v.link_edges))
+              for v in bm.verts]
+        curv = [0.5 * curv[v.index] + 0.5 * sum(curv[e.other_vert(v).index] for e in v.link_edges) / max(1, len(v.link_edges))
+                for v in bm.verts]
+    normals = [Vector(v.normal) for v in bm.verts]
+    bm.free()
+    attr = mesh.color_attributes["Col"]
+    glow_slot = 2
+    for p in mesh.polygons:
+        if p.material_index == glow_slot:
+            continue
+        for li in p.loop_indices:
+            vi = mesh.loops[li].vertex_index
+            r, g, b, a = attr.data[li].color_srgb
+            k = 0.3 + 0.7 * ao[vi] ** 1.6                       # впадины, подмышки, под брюхом
+            cv = max(-1.0, min(1.0, curv[vi] * 30.0))
+            k *= 1.0 + 0.3 * max(0.0, cv) - 0.25 * max(0.0, -cv)  # блик на рёбрах / грязь в складках
+            up = normals[vi].z
+            k *= 1.0 + 0.12 * max(0.0, up) - 0.08 * max(0.0, -up)  # «нарисованный» свет сверху
+            # тёплый отсвет в тени, холодный блик сверху — как кистью
+            r2, g2, b2 = r * k, g * k, b * k
+            if k < 0.8:
+                t = (0.8 - k) * 0.35
+                r2, g2, b2 = r2 + t * 0.06, g2 - t * 0.01, b2 + t * 0.05
+            attr.data[li].color_srgb = (min(1.0, r2), min(1.0, g2), min(1.0, b2), a)
 
 
 def seg_dist(p, a, b):
@@ -200,6 +430,12 @@ def skin_col(seed=0.0, dark_ends=True):
         m = smooth(0.58, 0.72, n01(c, 7.0, (seed, 2.0, 0.3)))
         col = lerp3(col, MOTTLE, m * 0.55)
         col = lerp3(col, SKIN_DARK, smooth(0.62, 0.8, n01(c, 15.0, (0, seed, 7))) * 0.4)
+        # прожилки: тонкие тёмные линии по изолинии шума (заметны только на плавной коже)
+        if SUBD_LEVEL > 0:
+            vn = abs(n01(c, 9.0, (seed, 5.0, 1.0)) - 0.5)
+            col = lerp3(col, VEIN, smooth(0.025, 0.0, vn) * 0.45 * smooth(0.45, 0.55, n01(c, 3.0, (1, seed, 4))))
+            # тёплый подтон на сгибах и брюхе — живая кожа, а не пластик
+            col = lerp3(col, (0.5, 0.4, 0.36), 0.18 * belly)
         # грязь снизу
         col = lerp3(col, SOOT, 0.35 * smooth(0.45, 0.05, c.z))
         if dark_ends:
@@ -544,12 +780,14 @@ def build_arms(rng):
 
         def geo(bm, sh=sh, el=el, wr=wr, kn=kn, sx=sx):
             # плечо — мясистый «бугор» дельты
-            ico(bm, sh + V((0.01 * sx, 0.0, 0.01)), 0.058, scale=(1.0, 1.0, 1.15), subdiv=1)
-            up = [sh, sh + (el - sh) * 0.35, sh + (el - sh) * 0.7, el]
-            sweep(bm, up, [0.05, 0.046, 0.036, 0.034], seg=8, sx=1.0, sy=0.9, ref=(1, 0, 0))
-            ico(bm, el + V((0, 0.012, 0)), 0.036, scale=(1.0, 1.2, 1.0), subdiv=1)  # острый локоть
-            lo = [el, el + (wr - el) * 0.3, el + (wr - el) * 0.7, wr]
-            sweep(bm, lo, [0.036, 0.04, 0.03, 0.026], seg=8, sx=1.0, sy=0.8, ref=(1, 0, 0))
+            ico(bm, sh + V((0.004 * sx, 0.0, 0.0)) + (el - sh) * 0.1, 0.05, scale=(0.95, 1.0, 1.35), subdiv=2)
+            # жилистое плечо: дельта -> бицепс -> тонкий перехват над локтем
+            up = [sh + (el - sh) * k for k in (0.0, 0.18, 0.4, 0.62, 0.82, 1.0)]
+            sweep(bm, up, [0.05, 0.047, 0.042, 0.04, 0.035, 0.034], seg=10, sx=1.0, sy=0.9, ref=(1, 0, 0))
+            ico(bm, el + V((0, 0.016, 0)), 0.027, scale=(0.9, 1.3, 0.9), subdiv=2)  # острый локоть
+            # предплечье: толстое у локтя, сухое к запястью
+            lo = [el + (wr - el) * k for k in (0.0, 0.15, 0.35, 0.6, 0.85, 1.0)]
+            sweep(bm, lo, [0.034, 0.04, 0.038, 0.03, 0.025, 0.025], seg=10, sx=1.0, sy=0.8, ref=(1, 0, 0))
             # кисть: ладонь
             sweep(bm, [wr, wr + (kn - wr) * 0.5, kn], [0.028, 0.034, 0.03], seg=6, sx=0.6, sy=1.0, ref=(1, 0, 0))
 
@@ -614,12 +852,14 @@ def build_legs(rng):
         hp, kn, hk, bl, to = (J[k + "_" + s] for k in ("hip", "knee", "hock", "ball", "toe"))
 
         def geo(bm, hp=hp, kn=kn, hk=hk, bl=bl, to=to, sx=sx):
-            thigh = [hp + V((0, 0.01, 0.04)), hp + (kn - hp) * 0.4 + V((0, 0.015, 0)), kn]
-            sweep(bm, thigh, [0.075, 0.064, 0.045], seg=9, sx=1.0, sy=1.1, ref=(1, 0, 0))
-            ico(bm, kn + V((0, -0.012, 0.005)), 0.044, scale=(1.0, 1.1, 1.0), subdiv=1)  # колено
-            shin = [kn, kn + (hk - kn) * 0.35 + V((0, -0.01, 0)), hk]
-            sweep(bm, shin, [0.042, 0.04, 0.026], seg=8, sx=1.0, sy=1.1, ref=(1, 0, 0))
-            ico(bm, hk + V((0, 0.012, 0)), 0.03, scale=(1.0, 1.25, 1.0), subdiv=1)  # пятка-скакательный сустав
+            thigh = [hp + V((0, 0.01, 0.04)), hp + (kn - hp) * 0.3 + V((0, 0.012, 0)),
+                     hp + (kn - hp) * 0.62 + V((0, 0.008, 0)), hp + (kn - hp) * 0.86, kn]
+            sweep(bm, thigh, [0.075, 0.07, 0.06, 0.048, 0.043], seg=10, sx=1.0, sy=1.1, ref=(1, 0, 0))
+            ico(bm, kn + V((0, -0.016, 0.004)), 0.034, scale=(1.0, 1.1, 1.0), subdiv=2)  # колено
+            shin = [kn, kn + (hk - kn) * 0.2 + V((0, 0.004, 0)), kn + (hk - kn) * 0.45 + V((0, -0.006, 0)),
+                    kn + (hk - kn) * 0.75, hk]
+            sweep(bm, shin, [0.042, 0.044, 0.036, 0.028, 0.026], seg=10, sx=1.0, sy=1.1, ref=(1, 0, 0))
+            ico(bm, hk + V((0, 0.014, 0)), 0.024, scale=(1.0, 1.3, 1.0), subdiv=2)  # пятка-скакательный сустав
             sweep(bm, [hk, (hk + bl) / 2, bl], [0.027, 0.024, 0.026], seg=7, sx=1.0, sy=0.85, ref=(1, 0, 0))
             # три пальца с когтями
             for off in (-1, 0, 1):
@@ -834,6 +1074,7 @@ def build_armature():
     eb = arm_data.edit_bones
     for name, h, t, parent in BONES:
         b = eb.new(name)
+        h, t = squash_bone(name, h), squash_bone(name, t)
         b.head, b.tail = h, t
         # единая ориентация осей: Z кости — вперёд (-Y) для вертикальных, вверх для горизонтальных
         axis = (t - h).normalized()
@@ -942,51 +1183,59 @@ def idle_pose(ph):
     }
 
 
-LEAN0, LEAN1 = 46.0, 6.0
+LEAN0, LEAN1 = 56.0, 4.0
+ARM_BASE, ARM_WIDE, LEG_BASE, LEG_WIDE = 44.0, 50.0, 0.0, 34.0
+
+
+def limb_cycle(x, stance=0.6):
+    """Фаза 0..1 → (вынос вперёд -1..1, подъём 0..1). Опора: лапа на земле едет назад; перенос: дугой вперёд."""
+    x %= 1.0
+    if x < stance:
+        u = x / stance
+        return 1.0 - 2.0 * u, 0.0
+    u = (x - stance) / (1.0 - stance)
+    e = u * u * (3 - 2 * u)
+    return -1.0 + 2.0 * e, math.sin(math.pi * u)
 
 
 def quad_pose(ph, run, lean=None):
-    """Ползком на четырёх лапах, как упырь: корпус низко над землёй, локти и колени в стороны,
-    лапы переставляются по диагонали (задняя левая с передней правой) — ползёт, а не скачет.
-    run 0 — крадётся, run 1 — быстро стелется по земле (та же походка, чаще и шире шаг)."""
-    a = TAU * ph
-    # диагональные пары, у шага — с небольшим разносом (четырёхтакт), у бега — почти вместе
-    d = 0.12 * (1 - run) + 0.04 * run
-    phase = {"thigh.L": 0.0, "upperarm.R": d, "thigh.R": 0.5, "upperarm.L": 0.5 + d}
-    amp_leg = 20 + 10 * run
-    amp_arm = 22 + 14 * run
-    crouch = 1.15 + 0.1 * run
+    """Ползком, как упырь: корпус низко и горизонтально, лапы широко в стороны.
+    Длинные руки гребут попеременно: лапа взлетает, широкой дугой выносится вперёд и вбивается когтями в землю,
+    подтягивая тело; короткие задние ноги по-лягушачьи коленями наружу. Корпус перекатывается с боку на бок."""
+    reach = 32 + 10 * run   # вынос руки вперёд-назад (град)
+    raise_ = 40 + 15 * run  # насколько лапа взлетает в переносе
+    stride = 20 + 8 * run   # шаг задних ног
     pose = {}
+    fwd = {}
     for s in ("L", "R"):
-        out = -1 if s == "L" else 1  # знак roll «наружу»
-        x = a - TAU * phase["thigh." + s]
-        lift = max(0.0, C(x)) ** 1.5  # невысокий перенос — лапа скользит над землёй
-        pose["thigh." + s] = (-14 - 22 * crouch - LEAN0 - LEAN1 * run - amp_leg * S(x), 16 * out, 0)
-        pose["shin." + s] = (14 + 34 * crouch - (8 + 6 * run) * lift, 0, 0)
-        pose["foot." + s] = (-6 - 14 * crouch + (14 + 8 * run) * lift - 8 * S(x), 0, 0)
-        pose["toes." + s] = (-14 * max(0.0, -S(x)), 0, 0)
-        x = a - TAU * phase["upperarm." + s]
-        lift = max(0.0, C(x)) ** 1.5
-        # плечо разведено в стороны, локоть согнут наружу — «паучья» постановка лап
-        tilt = LEAN0 + LEAN1 * run + 20 + 14
-        pose["upperarm." + s] = (-tilt + 50 - amp_arm * S(x), 48 * out, 0)
-        pose["forearm." + s] = (-72 - (18 + 8 * run) * lift, 0, 0)
-        pose["hand." + s] = (66 + 14 * lift - 12 * S(x), 0, 0)
-        pose["fingers." + s] = (16 - 18 * lift, 0, 0)
-    # корпус качается из стороны в сторону (как у ящерицы), почти без подпрыгиваний
-    sway = S(a)
+        out = -1 if s == "L" else 1
+        # рука и противоположная нога работают вместе; рука чуть раньше
+        f, lift = limb_cycle(ph + (0.0 if s == "L" else 0.5), 0.58)
+        fwd[s] = f
+        pose["clavicle." + s] = (-6 * f, 12 * out, 4 * f * -out)
+        # корпус почти горизонтален, поэтому «в стороны» — это поворот вокруг его оси «вверх» (yaw), а не roll
+        pose["upperarm." + s] = (-(LEAN0 + LEAN1 * run) - 26 + ARM_BASE - reach * f - raise_ * lift,
+                                 0, -(ARM_WIDE + 12 * lift) * out)
+        pose["forearm." + s] = (-55 - 35 * lift + 15 * f, 0, 0)
+        pose["hand." + s] = (62 + 25 * lift - 10 * f, 0, 0)
+        pose["fingers." + s] = (18 - 35 * lift, 0, 0)  # когти растопырены перед ударом, подгребают на опоре
+        g, glift = limb_cycle(ph + (0.5 if s == "L" else 0.0) + 0.08, 0.62)
+        pose["thigh." + s] = (-(LEAN0 + LEAN1 * run) - 40 + LEG_BASE - stride * g - 10 * glift, 0, -LEG_WIDE * out)
+        pose["shin." + s] = (42 + 18 * glift, 0, 0)
+        pose["foot." + s] = (-6 - 10 * glift, 0, 0)
+        pose["toes." + s] = (10 * max(0.0, -g), 0, 0)
+    # корпус: перекат к опорной руке, поворот плеч за выносимой лапой
+    roll = (fwd["R"] - fwd["L"]) * 0.5
     pose["root"] = (LEAN0 + LEAN1 * run, 0, 0)
-    pose["loc"] = (0.0, 0.12, 0.012 * abs(C(a)))
-    pose["hips"] = (-4, 4 * sway, 8 * sway)
-    pose["spine"] = (20, 0, -6 * sway)
-    pose["chest"] = (14, -4 * sway, -8 * sway)
-    pose["clavicle.L"] = (0, 10, 0)
-    pose["clavicle.R"] = (0, -10, 0)
-    pose["neck"] = (-34, 0, 5 * sway)
-    pose["head"] = (-30, 3 * sway, 6 * sway)
-    pose["jaw"] = (-(10 + 10 * run), 0, 0)
-    pose["ear.L"] = (0, 0, 10 + 8 * run)
-    pose["ear.R"] = (0, 0, -10 - 8 * run)
+    pose["loc"] = (0.0, 0.14, 0.0)
+    pose["hips"] = (-6, -5 * roll, -7 * roll)
+    pose["spine"] = (18, 4 * roll, 6 * roll)
+    pose["chest"] = (10, 8 * roll, 12 * roll)
+    pose["neck"] = (-40, 0, -6 * roll)
+    pose["head"] = (-34, -4 * roll, -8 * roll)
+    pose["jaw"] = (-(12 + 10 * run), 0, 0)
+    pose["ear.L"] = (0, 0, 14 + 6 * run)
+    pose["ear.R"] = (0, 0, -14 - 6 * run)
     return pose
 
 
@@ -1107,12 +1356,12 @@ DEATH = [
             "thigh.R": (-40, 0, 0), "shin.R": (55, 0, 0), "foot.R": (30, 0, 0), "toes.R": (30, 0, 0)}),
     (0.92, {"root": (80, 4, 9), "loc": (0, -0.03, 0.04), "spine": (-6, 4, 4), "chest": (-7, 4, 0), "neck": (-20, 0, 0),
             "head": (-16, 30, 38), "jaw": (-26, 0, 0),
-            "upperarm.L": (-150, -30, 0), "upperarm.R": (25, 30, 0), "forearm.L": (-20, 0, 0), "forearm.R": (5, 0, 0),
+            "upperarm.L": (-118, -30, 0), "upperarm.R": (25, 30, 0), "forearm.L": (0, 0, 0), "forearm.R": (5, 0, 0),
             "thigh.L": (-6, 0, 0), "shin.L": (8, 0, 0), "foot.L": (25, 0, 0), "toes.L": (20, 0, 0),
             "thigh.R": (-12, 0, 0), "shin.R": (12, 0, 0), "foot.R": (25, 0, 0), "toes.R": (20, 0, 0)}),
     (1.00, {"root": (83, 4, 10), "loc": (0, -0.04, 0.06), "spine": (-8, 4, 4), "chest": (-8, 4, 0), "neck": (-22, 0, 0),
             "head": (-18, 30, 40), "jaw": (-24, 0, 0),
-            "upperarm.L": (-160, -32, 0), "upperarm.R": (35, 32, 0), "forearm.L": (-18, 0, 0), "forearm.R": (8, 0, 0),
+            "upperarm.L": (-124, -32, 0), "upperarm.R": (35, 32, 0), "forearm.L": (6, 0, 0), "forearm.R": (8, 0, 0),
             "fingers.L": (-25, 0, 0), "fingers.R": (10, 0, 0),
             "thigh.L": (-4, 0, 0), "shin.L": (6, 0, 0), "foot.L": (30, 0, 0), "toes.L": (25, 0, 0),
             "thigh.R": (-10, 0, 0), "shin.R": (10, 0, 0), "foot.R": (30, 0, 0), "toes.R": (25, 0, 0)}),
@@ -1344,10 +1593,10 @@ def make_previews(arm, out, preview, poses):
         sc.frame_set(0)
         shots = []
         for i, (yaw, pitch, dist, tgt, lens) in enumerate([
-                (-28, 12, 3.2, (0, -0.05, 0.72), 50),    # 3/4 спереди
-                (90, 6, 3.2, (0, -0.05, 0.7), 50),       # профиль
-                (160, 25, 3.2, (0, 0.0, 0.75), 50),      # со спины
-                (-15, 8, 0.95, (0, -0.38, 1.22), 60)]):  # морда крупно
+                (-28, 12, 3.0, (0, -0.05, 0.55), 50),    # 3/4 спереди
+                (90, 6, 3.0, (0, -0.05, 0.52), 50),      # профиль
+                (160, 25, 3.0, (0, 0.0, 0.55), 50),      # со спины
+                (-15, 8, 0.95, (0, -0.38, 1.03), 60)]):  # морда крупно
             aim(cam, tgt, yaw, pitch, dist, lens)
             p = os.path.join(tmp, f"v{i}.png")
             render(p, 700, 900)
@@ -1407,14 +1656,24 @@ def main():
     build_wraps(rng)
     build_fungus(rng)
 
+    if SUBD_LEVEL > 0:
+        merge_skin()
     for obj, bones, rigid in PARTS:
-        assign_weights(obj, bones, rigid)
+        if rigid != "__done__":
+            assign_weights(obj, bones, rigid)
     objs = [p[0] for p in PARTS]
     with bpy.context.temp_override(active_object=objs[0], object=objs[0], selected_objects=objs,
                                    selected_editable_objects=objs):
         bpy.ops.object.join()
     body = objs[0]
     body.name = body.data.name = "Ghoul_Body"
+    # короткие ноги: сжать вершины по весам ног
+    leg_groups = {g.index for g in body.vertex_groups if g.name.startswith(LEG_BONES)}
+    for v in body.data.vertices:
+        legw = sum(g.weight for g in v.groups if g.group in leg_groups)
+        v.co = squash(v.co, min(1.0, legw))
+    if SUBD_LEVEL > 0:
+        paint_pass(body)
     tris = sum(len(p.vertices) - 2 for p in body.data.polygons)
     print(f"[ghoul] triangles: {tris}, verts: {len(body.data.vertices)}")
 

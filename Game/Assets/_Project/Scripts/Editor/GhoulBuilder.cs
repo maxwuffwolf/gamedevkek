@@ -94,8 +94,9 @@ namespace Game.Editor
                 mat.EnableKeyword("_VERTEX_COLORS");
                 mat.SetTexture("_BaseMap", null);
                 mat.SetFloat("_Cull", twoSided ? 0f : 2f);
+                // гладкая кожа: мягкий переход света в тень, как на рисованных моделях (а не жёсткий cel)
                 mat.SetFloat("_Steps", 2);
-                mat.SetFloat("_StepSmooth", 0.14f);
+                mat.SetFloat("_StepSmooth", 0.32f);
                 // холодная тень — гуль «сливается» с сумерками, но силуэт держат контур и лунный rim
                 mat.SetColor("_ShadowColor", new Color(0.38f, 0.4f, 0.58f));
                 if (mat.HasProperty("_OutlineWidth"))
